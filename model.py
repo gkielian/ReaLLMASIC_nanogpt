@@ -57,6 +57,17 @@ class CausalSelfAttention(nn.Module):
         self.n_head = config.n_head
         self.n_embd = config.n_embd
         self.dropout = config.dropout
+        # sliding window
+        self.use_sliding_window = config.use_sliding_window
+
+        if self.use_sliding_window:
+            # initialize sliding window causal mask
+            self.register_buffer( "mask",
+                                 torch.tril(torch.ones(config.block_size,
+                                                       config.block_size))
+                                 .view(1, 1, config.block_size,
+                                       config.block_size))
+
         # flash attention make GPU go brrrrr but support is only in PyTorch >= 2.0
         self.flash = hasattr(torch.nn.functional, 'scaled_dot_product_attention')
         self.use_softermax = config.use_softermax
@@ -86,14 +97,19 @@ class CausalSelfAttention(nn.Module):
             y = torch.nn.functional.scaled_dot_product_attention(q, k, v, attn_mask=None, dropout_p=self.dropout if self.training else 0, is_causal=True)
         else:
             # manual implementation of attention
-            att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
-            att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
-            if self.use_softermax:
-                att = softermax(att, dim=-1)
+            if self.use_sliding_window:
+                mask = self.mask[:, :, -T:, -T:] # crop mask to sequence length
+                attn = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+                attn = attn.masked_fill(mask == 0, float('-inf'))
             else:
-                att = F.softmax(att, dim=-1)
-            att = self.attn_dropout(att)
-            y = att @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+                attn = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+                attn = attn.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
+            if self.use_softermax:
+                attn = softermax(attn, dim=-1)
+            else:
+                attn = F.softmax(attn, dim=-1)
+            attn = self.attn_dropout(attn)
+            y = attn @ v # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
         y = y.transpose(1, 2).contiguous().view(B, T, C) # re-assemble all head outputs side by side
 
         # output projection
@@ -144,6 +160,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    use_sliding_window: bool = False # True: uses softermax; False uses softmax
     use_softermax: bool = False # True: uses softermax; False uses softmax
     use_rmsnorm: bool = True # Add option for RMSNorm
 
