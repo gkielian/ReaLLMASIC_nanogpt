@@ -65,8 +65,8 @@ def parse_args():
 
     # System args
     parser.add_argument('--device', default='cuda', type=str)
-    parser.add_argument('--dtype', default='bfloat16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16', type=str)
-    parser.add_argument('--compile', action='store_true')
+    parser.add_argument('--dtype', default='float16' if torch.cuda.is_available() and torch.cuda.is_bf16_supported() else 'float16', type=str)
+    parser.add_argument('--compile', action='store_true', default=True)
 
     # Logging args
     parser.add_argument('--log_project', default='out-test', type=str)
@@ -279,7 +279,7 @@ class Trainer:
                             'model_args': self.model_args,
                             'iter_num': self.iter_num,
                             'best_val_loss': self.best_val_loss,
-                            'config': self.args,
+                            'config': vars(self.args),
                         }
                         print(f"saving checkpoint to {self.args.out_dir}")
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
