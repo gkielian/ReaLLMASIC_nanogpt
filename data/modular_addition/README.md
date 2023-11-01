@@ -19,7 +19,12 @@ progressive learning (advancing only upon mastery).
 
 ## Creating Examples and Selecting Tokenisation Space
 
-1. Run `create_examples.sh` to generate the raw examples in `data/`
+1. Run `create_examples.sh -m <modulo>` to generate raw examples in `data/`
+
+For example to create examples modulo 101 (and for all numbers 0 -> 100), run:
+```bash
+bash create_examples.sh -m 101
+```
 
 2. Include any tokens you want to include in `tokens.txt`, for example:
 
