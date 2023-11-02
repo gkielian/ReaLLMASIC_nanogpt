@@ -4,6 +4,7 @@ import time
 from datetime import datetime
 import math
 import pickle
+import csv
 
 import numpy as np
 import torch
@@ -16,6 +17,18 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model import GPTConfig, GPT
 
+
+class TextBuffer:
+    def __init__(self):
+        self.buffer = []
+
+    def add(self, text):
+        self.buffer.append(text)
+
+    def write_to_csv(self, filename):
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerows(self.buffer)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -193,15 +206,27 @@ class Trainer:
         self.raw_model = self.model.module if self.ddp else self.model
 
         # Tensorboard
+        self.buffer= TextBuffer()
         if self.args.tensorboard_log:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamp)
+            log_subpath = os.path.join(self.args.tensorboard_log_dir, timestamp
+                                       + "_" + str(self.args.tensorboard_project) +
+                                       str(self.args.tensorboard_run_name))
             self.writer = SummaryWriter(log_subpath)
 
         # Wandb
         if self.args.wandb_log and self.master_process:
             import wandb
             wandb.init(project=self.args.wandb_project, name=self.args.wandb_run_name, config=self.args)
+
+    def add(self, text):
+      self.buffer.append(text)
+
+    def write_to_csv(self, filename):
+        with open(filename, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow([self.title])
+            writer.writerows(self.buffer)
 
     def get_batch(self, split):
         data = self.train_data if split == 'train' else self.val_data
@@ -239,11 +264,21 @@ class Trainer:
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
         return self.args.min_lr + coeff * (self.args.learning_rate - self.args.min_lr)
 
+    def log_metrics_2(self, loss, running_mfu, iter_num):
+        if self.args.tensorboard_log:
+            self.writer.add_scalars(
+                "loss", { "train": loss }, iter_num
+            )
+            self.buffer.add([str(iter_num), str(loss.item())])
+
     def log_metrics(self, losses, lr, running_mfu, iter_num):
         if self.args.tensorboard_log:
             self.writer.add_scalars(
                 "loss", { "train": losses['train'], "val": losses['val'] }, iter_num
             )
+            self.val_loss = losses['val']
+            self.lr = lr
+            self.mfu = running_mfu*100
             self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
             self.writer.add_scalar("lr", lr, iter_num)
 
@@ -284,8 +319,9 @@ class Trainer:
                             'best_val_loss': self.best_val_loss,
                             'config': vars(self.args),
                         }
-                        print(f"saving checkpoint to {self.args.out_dir}")
-                        torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+                        if self.args.only_save_checkpoint_at_end == False:
+                          print(f"saving checkpoint to {self.args.out_dir}")
+                          torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
 
             if self.iter_num == 0 and self.args.eval_only:
                 break
@@ -320,11 +356,13 @@ class Trainer:
                     mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
                 print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+                self.log_metrics_2(loss, running_mfu, self.iter_num)
 
             self.iter_num += 1
             local_iter_num += 1
 
             if self.iter_num > self.args.max_iters:
+                self.buffer.write_to_csv(str(self.args.tensorboard_project) + "_" + str(self.args.tensorboard_run_name) + ".csv")
                 if self.args.only_save_checkpoint_at_end:
                     checkpoint = {
                         'model': self.raw_model.state_dict(),
