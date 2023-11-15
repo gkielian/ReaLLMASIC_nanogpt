@@ -68,9 +68,15 @@ class Constantmax(nn.Module):
         # initialize parameters
         self.reset_parameters()
 
+    def reset_parameters(self):
+        # Initialize weight to ones
+        nn.init.ones_(self.gamma)
+        # Initialize bias to zeros
+        nn.init.ones_(self.beta)
+
     def forward(self, x):
         x = x - self.beta
-        e_x = torch.pow(2.0, x)
+        e_x = torch.exp(x)
         return e_x / self.gamma
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
