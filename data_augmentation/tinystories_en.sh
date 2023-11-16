@@ -12,7 +12,6 @@ declare -A langs=(
 # Loop languages
 for lang in "${!langs[@]}"
 do
-  # Make sure there is an output directory
   output_dir="./datasets/json_stories/${lang}"
   if [ ! -d "${output_dir}" ]; then
     mkdir -p "${output_dir}"
@@ -22,7 +21,6 @@ do
   for i in {00..49}
   do
     input="./datasets/json_stories/archive/data${i}.json"
-    output="./datasets/json_stories/${lang}/data${i}_${lang}.json"
 
     # Check if already translated
     if [ ! -f "${output}" ]; then
@@ -34,7 +32,7 @@ do
       fi
 
       # Construct command
-      python3 aug_translation.py -i ${input} -o ${output} -j -l ${lang}&
+      python3 aug_translation.py -i "${input}" -l "${lang}" > "data_${lang}_${i}.txt" &
       processes=$((processes+1))
       echo "number processes is $processes"
 

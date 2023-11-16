@@ -68,7 +68,7 @@ def main():
                 dataset_entries.append(dataset_entry)
             else:
                 # Create concatenated dataset_entry string
-                dataset_entry = f"\{prompt_start}{story_trans}\n\nPlease summarize the above.{prompt_end}\n\n{story_summary}\n\n"
+                dataset_entry = f"{prompt_start}{story_trans}\n\nPlease summarize the above.{prompt_end}\n{story_summary}\n"
                 dataset_entries.append(dataset_entry)
 
     # Output dataset
