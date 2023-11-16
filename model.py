@@ -58,6 +58,7 @@ class Constantmax(nn.Module):
     def __init__(self, dim=-1):
         super().__init__()
         self.dim = dim
+        self.eps = 1
 
         # demonimator
         self.gamma = nn.Parameter(torch.Tensor(1))
@@ -77,7 +78,8 @@ class Constantmax(nn.Module):
     def forward(self, x):
         x = x - self.beta
         e_x = torch.exp(x)
-        return e_x / self.gamma
+        print("constantmax beta gamma eps", self.beta, self.gamma, self.eps)
+        return e_x / (self.gamma + self.eps)
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
 class Strongermax(nn.Module):
