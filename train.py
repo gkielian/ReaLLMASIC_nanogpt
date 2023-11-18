@@ -43,6 +43,9 @@ def parse_args():
     training_group.add_argument('--gradient_accumulation_steps', default=1, type=int)
     training_group.add_argument('--batch_size', default=64, type=int)
 
+    # Seed args
+    training_group.add_argument('--seed_offset', default=0, type=int)
+
     # Model args
     model_group.add_argument('--block_size', default=256, type=int)
     model_group.add_argument('--n_layer', default=6, type=int)
@@ -136,7 +139,8 @@ class Trainer:
         if self.master_process:
             os.makedirs(self.args.out_dir, exist_ok=True)
 
-        torch.manual_seed(1337 + self.seed_offset)
+        torch.manual_seed(1337 + self.seed_offset + self.args.seed_offset)
+        print("seed offset is:", str(1337 + self.seed_offset + self.args.seed_offset))
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
