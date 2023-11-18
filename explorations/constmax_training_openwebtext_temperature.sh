@@ -3,7 +3,7 @@
 # head to repo root
 cd ../
 
-for seed in {1337..1616..2}; do
+for seed in {1337..1387..2}; do
 
   python3 train.py \
     --max_iters 8000 \
