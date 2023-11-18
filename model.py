@@ -59,24 +59,29 @@ class Constantmax(nn.Module):
         super().__init__()
         self.dim = dim
 
-        # demonimator
+        # Temperature - tau
+        self.tau = nn.Parameter(torch.Tensor(1))
+
+        # demonimator - gamma
         self.gamma = nn.Parameter(torch.Tensor(1))
 
-        # learnable 'xmax'
+        # learnable 'xmax' - beta
         self.beta = nn.Parameter(torch.Tensor(1))
 
         # initialize parameters
         self.reset_parameters()
 
     def reset_parameters(self):
-        # Initialize weight to ones
+        # Initialize tau to one
         nn.init.ones_(self.gamma)
-        # Initialize bias to zeros
+        # Initialize denominator to one
+        nn.init.ones_(self.gamma)
+        # Initialize beata to ones
         nn.init.ones_(self.beta)
 
     def forward(self, x):
         x = x - self.beta
-        e_x = torch.exp(x)
+        e_x = torch.exp(x/self.tau)
         return e_x / self.gamma
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
