@@ -59,9 +59,6 @@ class Constantmax(nn.Module):
         super().__init__()
         self.dim = dim
 
-        # Temperature - tau
-        self.tau = nn.Parameter(torch.Tensor(1))
-
         # demonimator - gamma
         self.gamma = nn.Parameter(torch.Tensor(1))
 
@@ -72,8 +69,6 @@ class Constantmax(nn.Module):
         self.reset_parameters()
 
     def reset_parameters(self):
-        # Initialize tau to one
-        nn.init.ones_(self.gamma)
         # Initialize denominator to one
         nn.init.ones_(self.gamma)
         # Initialize beata to ones
@@ -81,7 +76,7 @@ class Constantmax(nn.Module):
 
     def forward(self, x):
         x = x - self.beta
-        e_x = torch.exp(x/self.tau)
+        e_x = torch.exp(x)
         return e_x / self.gamma
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
@@ -102,18 +97,25 @@ class Strongermax(nn.Module):
 
 # Polynomial estimate of Softmax
 class Polymax(nn.Module):
-    def __init__(self, x_intercept=-100, y_intercept=1, power=2, divisor=1000.0):
+    def __init__(self, x_intercept=-100, y_intercept=1, power=2, divisor_init=1000.0):
         super().__init__()
 
         assert(x_intercept < 0) # ensure x_intercepts strictly left of the y-axis
         self.x_intercept = x_intercept # where to transition from y=0 to m*x+b
-        self.y_intercept = y_intercept # where teh graph crosses y-axis
+        self.y_intercept = y_intercept # where the graph crosses y-axis
 
         self.power = power
-        self.divisor = divisor
+        self.divisor = nn.Parameter(torch.Tensor(1))
 
         # TODO: create single location for printing the model settings
         print("Use polymax")
+
+        # initialize parameters
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        # Initialize divisor to one
+        nn.init.ones_(self.divisor)
 
     def forward(self, x):
         # Overview:
