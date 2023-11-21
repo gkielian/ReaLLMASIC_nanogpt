@@ -55,24 +55,15 @@ class Softermax(nn.Module):
 # Softmax base 2, with constant denominator, and option to remove max subtraction
 class Constantmax(nn.Module):
     """ Base-2 Softmax with option to remove max subtraction"""
-    def __init__(self, dim=-1):
+    def __init__(self, dim=-1, initial_gamma=500):
         super().__init__()
         self.dim = dim
 
         # demonimator - gamma
-        self.gamma = nn.Parameter(torch.Tensor(1))
+        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
 
         # learnable 'xmax' - beta
-        self.beta = nn.Parameter(torch.Tensor(1))
-
-        # initialize parameters
-        self.reset_parameters()
-
-    def reset_parameters(self):
-        # Initialize denominator to one
-        nn.init.ones_(self.gamma)
-        # Initialize beata to ones
-        nn.init.ones_(self.beta)
+        self.beta = nn.Parameter(torch.Tensor([0.0]))
 
     def forward(self, x):
         x = x - self.beta
