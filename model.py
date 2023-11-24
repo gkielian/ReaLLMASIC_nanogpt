@@ -55,18 +55,20 @@ class Softermax(nn.Module):
 # Softmax base 2, with constant denominator, and option to remove max subtraction
 class Constantmax(nn.Module):
     """ Base-2 Softmax with option to remove max subtraction"""
-    def __init__(self, dim=-1, subtract_max=True, constant=1000):
+    def __init__(self, dim=-1, initial_gamma=500):
         super().__init__()
         self.dim = dim
-        self.subtract_max = subtract_max
-        self.constant = constant
+
+        # demonimator - gamma
+        self.gamma = nn.Parameter(torch.Tensor([initial_gamma]))
+
+        # learnable 'xmax' - beta
+        self.beta = nn.Parameter(torch.Tensor([0.0]))
 
     def forward(self, x):
-        if self.subtract_max:
-            max_x = x.max(dim=self.dim, keepdim=True).values
-            x = x - max_x
-        e_x = torch.pow(2.0, x)
-        return e_x / self.constant
+        x = x - self.beta
+        e_x = torch.exp(x)
+        return e_x / self.gamma
 
 # Like softermax, but parameterized to permit exploration of bases greater than 2
 class Strongermax(nn.Module):
@@ -275,7 +277,7 @@ class CausalSelfAttention(nn.Module):
             if self.softmax_variant == "constantmax":
               self.use_softermax_xmax = config.use_softermax_xmax
               self.constantmax_constant = config.constantmax_constant
-              self.softmax_layer = Constantmax(subtract_max=self.use_softermax_xmax, constant=self.constantmax_constant)
+              self.softmax_layer = Constantmax()
 
             if self.softmax_variant == "strongermax":
               self.use_softermax_xmax = config.use_softermax_xmax
