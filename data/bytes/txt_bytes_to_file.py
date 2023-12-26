@@ -13,7 +13,7 @@ def parseargs():
 def text_to_file(input_file, output_file):
     # Read in text representation
     with open(input_file, 'r') as f:
-        text_representation = f.read()
+        text_representation = f.read().rstrip('\n')
     original_content = binascii.unhexlify(text_representation.encode('utf-8'))
 
     # Export original format
@@ -21,6 +21,6 @@ def text_to_file(input_file, output_file):
         f.write(original_content)
 
 if __name__ == "__main__":
-    args = parser.parse_args()
+    args = parseargs()
     text_to_file(args.input_file, args.output_file)
 
