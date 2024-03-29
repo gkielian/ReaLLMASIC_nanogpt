@@ -18,7 +18,7 @@ from torch.nn import functional as F
 
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax, ExpPolymax, SaturatingConSmax
-from variations.normalization_variations import LayerNorm, RMSNorm, PowerNorm, GroupNorm, InstanceNorm, BatchNorm
+from variations.normalization_variations import LayerNorm, RMSNorm, PowerNorm, GroupNorm, InstanceNorm, BatchNorm, PowerNorm2, PowerNorm3, PowerNorm5
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions
 from variations.activation_variations import SquaredReLU, activation_dictionary
 
@@ -275,6 +275,15 @@ class Block(nn.Module):
         elif config.layernorm_variant == "powernorm":
             self.ln_1 = PowerNorm(config.n_embd)
             self.ln_2 = PowerNorm(config.n_embd)
+        elif config.layernorm_variant == "powernorm2":
+            self.ln_1 = PowerNorm2(config.n_embd)
+            self.ln_2 = PowerNorm2(config.n_embd)
+        elif config.layernorm_variant == "powernorm3":
+            self.ln_1 = PowerNorm3(config.n_embd)
+            self.ln_2 = PowerNorm3(config.n_embd)
+        elif config.layernorm_variant == "powernorm5":
+            self.ln_1 = PowerNorm5(config.n_embd)
+            self.ln_2 = PowerNorm5(config.n_embd)
         elif config.layernorm_variant == "groupnorm":
             self.ln_1 = GroupNorm(num_groups=config.n_head, num_channels=config.n_embd)
             self.ln_2 = GroupNorm(num_groups=config.n_head, num_channels=config.n_embd)
@@ -398,6 +407,10 @@ class GPT(nn.Module):
             self.normalization_variant_output = RMSNorm(config.n_embd)
         elif config.layernorm_variant_output == "powernorm":
             self.normalization_variant_output = PowerNorm(config.n_embd)
+        elif config.layernorm_variant_output == "powernorm2":
+            self.normalization_variant_output = PowerNorm2(config.n_embd)
+        elif config.layernorm_variant_output == "powernorm3":
+            self.normalization_variant_output = PowerNorm3(config.n_embd)
         elif config.layernorm_variant_output == "groupnorm":
             self.normalization_variant_output = GroupNorm(num_groups=config.n_head, num_channels=config.n_embd)
         elif config.layernorm_variant_output == "instancenorm":
