@@ -37,6 +37,8 @@ class Constantmax(nn.Module):
 
     def forward(self, x):
         x = x - self.beta
+        k = 10.0
+        x = torch.clamp(x, max=k)
         e_x = torch.pow(self.constantmax_base, x)
         return e_x / self.gamma
 
@@ -90,12 +92,16 @@ class Constantmax_quan(nn.Module):
             #print('fake_gamma:', self.fake_gamma)
             self.fake_beta, self.fake_gamma=_const_quan(self.beta, self.gamma)
             x = x - self.fake_beta
+            k = 10.0
+            x = torch.clamp(x, max=k)
             e_x = torch.exp(x)
             return e_x / self.fake_gamma
         else:
             scale_beta=100 #scaling factor for quantization, should make it as parameter
             scale_gamma=10
             x = x - dequantize(quantize(self.beta,scale_beta), scale_beta)
+            k = 10.0
+            x = torch.clamp(x, max=k)
             e_x = torch.exp(x)
             return e_x/dequantize(quantize(self.gamma,scale_gamma), scale_gamma)
 
@@ -144,6 +150,10 @@ class Polymax(nn.Module):
 
         # Polynomial section
         poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+        # eps = 1e-6  # Small constant to ensure x is never zero when raised to a power
+        # safe_x = torch.where(x > 0, x, torch.full_like(x, eps))
+        # poly_piece = torch.where(x > 0, safe_x ** self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
 
         # Combine sections
         return (poly_piece + linear_piece + flat_piece)/self.divisor

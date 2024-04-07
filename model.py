@@ -18,7 +18,7 @@ from torch.nn import functional as F
 # Variations
 from variations.softmax_variations import Softermax, Constantmax, Constantmax_quan, Strongermax, Polymax, SigSoftmax
 from variations.normalization_variations import LayerNorm, RMSNorm
-from variations.position_encoding_variations import RotaryEmbedding, ShortRope
+from variations.position_encoding_variations import RotaryEmbedding, ShortRope, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
 
 
@@ -39,6 +39,7 @@ class CausalSelfAttention(nn.Module):
         self.dropout = config.dropout
         self.window_size = config.window_size
         self.gate = config.gate
+        self.fire_pos_enc = FIRE(num_heads=config.n_head)
 
         # Rotary Positional Embeddings
         self.rotary_emb = None
@@ -86,8 +87,7 @@ class CausalSelfAttention(nn.Module):
                                         .view(1, 1, config.block_size, config.block_size))
 
     def forward(self, x):
-        if self.rotary_emb is not None:
-          x = self.rotary_emb(x)
+
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
         if self.window_size is not None:
             window_mask = torch.ones((1, 1, T, T), device=x.device)
@@ -124,9 +124,21 @@ class CausalSelfAttention(nn.Module):
                 # regular lower triangle attention
                 att = att.masked_fill(self.bias[:,:,:T,:T] == 0, float('-inf'))
 
+            if self.use_fire_emb:
+                fire_bias = self.fire_pos_enc(x)  # Add this line
+                att = att + fire_bias  # Add this line
+
+            # if torch.sum(att.isnan()==True):
+            #     print("fire bias + att nan")
+            #     input()
+
+
             # softmax variation
             if self.softmax_variant_attn != 'softmax':
                 att = self.softmax_layer(att)
+                # if torch.sum(att.isnan()==True):
+                #     print("softmax nan")
+                #     input()
             else:
                 att = F.softmax(att, dim=-1)
 
@@ -345,7 +357,8 @@ class GPT(nn.Module):
     def forward(self, idx, targets=None):
         device = idx.device
         b, t = idx.size()
-        assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+        # assert t <= self.config.block_size, f"Cannot forward sequence of length {t}, block size is only {self.config.block_size}"
+        print(t)
         pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
 
         # forward the GPT model itself
@@ -483,7 +496,8 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None,
+                 block_size=None):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -491,7 +505,10 @@ class GPT(nn.Module):
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
-            idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            # idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+            block_size = 800
+            idx_cond = idx if idx.size(1) <= block_size else idx[:, -block_size:]
+
             # forward the model to get the logits for the index in the sequence
             logits, _ = self(idx_cond)
             # pluck the logits at the final step and scale by desired temperature
@@ -512,3 +529,8 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+
+
+# Enable anomaly detection
+torch.autograd.set_detect_anomaly(True)
+

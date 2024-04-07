@@ -105,8 +105,9 @@ def parse_args():
                              default="softmax", choices=["constantmax_quan", "constantmax", "polymax", "strongermax", "softermax", "sigsoftmax", "softmax"])
 
     ## Custom Softmax Variation Options
-    model_group.add_argument("--constantmax_initial_beta", type=float, default=0.0)
-    model_group.add_argument("--constantmax_initial_gamma", type=float, default=100.0)
+    model_group.add_argument("--constantmax_initial_beta", type=float, default=6.5)
+    model_group.add_argument("--constantmax_initial_gamma", type=float,
+                             default=100.0)
     model_group.add_argument('--constantmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--constantmax_base", type=float, default=2.0)
 
