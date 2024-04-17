@@ -126,10 +126,11 @@ def main():
             train_xs = torch.stack([torch.from_numpy((train_data[i]).astype(float)) for i in ii])
             test_xs = torch.stack([torch.from_numpy((test_data[i]).astype(float)) for i in ii])
             xs = torch.cat((train_xs, test_xs), dim=1)
-        t_embs = xs[:, 10:12].to(args.device).float() # time embeddings for year
-        ts = xs[500:, 10:14].to(args.device).float()
-        gts = xs[:, :10].to(args.device).float()
-        xs = xs[:500, :14].to(args.device).float()
+        print(f"Shape of xs: {xs.shape}")
+        t_embs = xs[10:12].to(args.device).float() # time embeddings for year
+        ts = xs[10:14].to(args.device).float()
+        gts = xs[:10].to(args.device).float()
+        xs = xs[:14].to(args.device).float()
 
     # run generation
     with torch.no_grad():
