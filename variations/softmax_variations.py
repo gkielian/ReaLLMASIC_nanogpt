@@ -35,10 +35,18 @@ class ConSmax(nn.Module):
         else:
           self.consmax_base = config.consmax_base
 
+        self.inputs = []
+        self.outputs = []
+
+
     def forward(self, x):
+        self.inputs = x
+
         x = x - self.beta
         e_x = torch.pow(self.consmax_base, x)
-        return e_x / self.gamma
+        outputs = e_x / self.gamma
+        self.outputs = outputs
+        return outputs
 
 # Constantmax Quantized
 
