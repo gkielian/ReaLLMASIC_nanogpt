@@ -1,71 +1,33 @@
 [
     {
-      "max_iters": ["3500"],
-      "n_layer": ["6"],
+      "max_iters": ["10000"],
+      "n_kv_group": ["6"],
       "n_head": ["6"],
       "n_embd": ["384"],
       "block_size":["256"],
-      "use_post_ln": [true, false],
+      "use_post_ln": [true],
       "device": ["cuda"],
-      "dtype": ["float16"],
+      "dtype": ["bfloat16"],
       "dataset": ["shakespeare_char"],
       "use_rotary_embeddings": [false],
       "use_abs_pos_embeddings": [true],
-      "compile": [false],
-      "softmax_variant_attn": ["strongermax", "softmax", "consmax", "polymax", "exppolymax", "saturatingconsmax"],
-      "polymax_divisor": {
-          "conditions": [["softmax_variant_attn", "polymax"]],
-          "options": ["10.0", "1000.0", "10000.0"]
+      "compile": [true],
+      "softmax_variant_attn": ["consmax"],
+       "consmax_initial_beta": {
+        "range": {
+          "start": 0.5,
+          "end": 10.1,
+          "step": 0.5
+        }
       },
-      "polymax_y_intercept": {
-          "conditions": [["softmax_variant_attn", "polymax"]],
-          "options": ["0.0", "1.0", "1000.0"]
+       "consmax_initial_gamma": {
+        "range": {
+          "start": 50.0,
+          "end": 200.1,
+          "step": 50.0
+        }
       },
-      "polymax_power": {
-          "conditions": [["softmax_variant_attn", "polymax"]],
-          "options": ["1.0", "2.0", "3.0"]
-      },
-      "polymax_x_intercept": {
-          "conditions": [["softmax_variant_attn", "polymax"]],
-          "options": ["-10000", "-1000", "-100"]
-      },
-      "exppolymax_divisor": {
-          "conditions": [["softmax_variant_attn", "exppolymax"]],
-          "options": ["500.0", "1000.0", "2000.0"]
-      },
-      "exppolymax_base": {
-          "conditions": [["softmax_variant_attn", "exppolymax"]],
-          "options": ["2.0", "2.719", "3.0", "3.5", "4.0", "4.5"]
-      },
-      "exppolymax_power": {
-          "conditions": [["softmax_variant_attn", "exppolymax"]],
-          "options": ["2.0", "3.0"]
-      },
-      "consmax_initial_beta": {
-          "conditions": [["softmax_variant_attn", "saturatingconsmax"]],
-          "options": ["1.5", "2.5", "3.5"]
-      },
-      "consmax_initial_gamma": {
-          "conditions": [["softmax_variant_attn", "saturatingconsmax"]],
-          "options": ["50.0", "100.0", "200.0"]
-      },
-      "strongermax_sum_to_1": {
-          "conditions": [["softmax_variant_attn", "strongermax"]],
-          "options": [true, false]
-      },
-      "strongermax_use_xmax": {
-          "conditions": [["softmax_variant_attn", "strongermax"]],
-          "options": [true, false]
-      },
-      "strongermax_divisor": {
-          "conditions": [["softmax_variant_attn", "strongermax"]],
-          "options": ["1.0","2.0", "25", "100", "500.0", "1000.0"]
-      },
-      "strongermax_strength": {
-          "conditions": [["softmax_variant_attn", "strongermax"]],
-          "options": ["2.0", "2.719", "3.0", "3.5", "4.0", "4.5"]
-      },
-      "tensorboard_run_name": ["new_softmaxes"]
+      "n_layer": ["8", "7", "6", "5"]
     }
   ]
 
