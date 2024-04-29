@@ -84,7 +84,8 @@ def main():
             csv_reader = csv.reader(csvfile)
             next(csv_reader)  # Skip the header row
             for row in csv_reader:
-                ckpt_data.append((get_short_ckpt_file(row[0]), float(row[1]), int(row[2])))
+                ckpt_data.append((get_short_ckpt_file(row[0]), float(row[1]),
+                                  int(row[2]), str(row[3]), str(row[4])))
     else:
         print("Please provide either a directory or a CSV file.")
         return
