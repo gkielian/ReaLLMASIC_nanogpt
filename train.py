@@ -125,10 +125,14 @@ def parse_args():
                                                          "consmax",
                                                          "consmax_quan",
                                                          "polymax",
+                                                         "polymax_quan",
+                                                         "exppolymax",
                                                          "strongermax",
                                                          "softermax",
                                                          "sigsoftmax",
                                                          "softmax",
+                                                         "softplus",
+                                                         "squareplus",
                                                          "exppolymax",
                                                          ])
     model_group.add_argument("--softmax_variant_output", type=str,
@@ -137,10 +141,14 @@ def parse_args():
                                                          "consmax",
                                                          "consmax_quan",
                                                          "polymax",
+                                                         "polymax_quan",
+                                                         "exppolymax",
                                                          "strongermax",
                                                          "softermax",
                                                          "sigsoftmax",
                                                          "softmax",
+                                                         "softplus",
+                                                         "squareplus",
                                                          "exppolymax",
                                                          ])
 
@@ -210,6 +218,7 @@ def parse_args():
     logging_group.add_argument('--log_project', default='out-test', type=str)
     logging_group.add_argument('--log_run_name', default='logs-test', type=str)
     logging_group.add_argument('--timestamp', default='', type=str)
+    logging_group.add_argument('--save_nan_checkpoint', default=False, action=argparse.BooleanOptionalAction)
 
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)

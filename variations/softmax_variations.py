@@ -227,7 +227,7 @@ class ExpPolymax(nn.Module):
         # derivative of poly at 0 should equal a^0
         # d(x^n + y-int) = d(a^x|x=0) = ln(a) * a^0 = ln(a)
         # n * x^(n-1) = ln(a)
-        # x = ln(a) * ( 1 / n ) ** (1/(n-1))
+        # x = (ln(a) * ( 1 / n )) ** (1/(n-1))
         # Note: if n==1 (straight line) match is already attained, and calculation would nan, so test this case first
         if config.exppolymax_power == 1.0:
             # Note: this only works with y=x an e^x, since we'd have to implement a multiplier or shift teh exponent otherwise.
@@ -236,8 +236,8 @@ class ExpPolymax(nn.Module):
             # ln(e) = 1
             self.x_derivative_match_shift = (1.0 / config.exppolymax_power)**(1/(config.exppolymax_power - 1))
         else:
-            # ln(a) must be calculated
-            self.x_derivative_match_shift = torch.log2(config.exppolymax_base) * (1.0 / config.exppolymax_power)**(1/(config.exppolymax_power - 1))
+            # ln(a) must be calculated, note torch.log is the natural log 'ln'
+            self.x_derivative_match_shift = (torch.log(config.exppolymax_base) * (1.0 / config.exppolymax_power))**(1/(config.exppolymax_power - 1))
 
     def forward(self, x):
         # Overview:
@@ -252,6 +252,43 @@ class ExpPolymax(nn.Module):
 
         # Combine sections
         return (poly_piece + exponential_piece)/self.divisor
+
+class PolymaxQuan(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+        assert(config.polymax_x_intercept < 0)  # ensure x_intercept is strictly left of the y-axis
+        self.x_intercept = config.polymax_x_intercept  # where to transition from y=0 to m*x+b
+        self.y_intercept = config.polymax_y_intercept  # where the graph crosses y-axis
+        self.power = config.polymax_power
+        self.divisor = config.polymax_divisor
+
+    def forward(self, x):
+        # Forward pass: ReLU^2
+        relu_squared = torch.where(x > 0, x**2, torch.tensor(0.0, device=x.device))
+        return relu_squared / self.divisor
+
+    def backward(self, x):
+        # Backward pass: Polymax
+        # Flat section
+        flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
+
+        # Linear section
+        m = self.y_intercept / self.x_intercept  # aka 'slope', also x intercept != 0
+        b = self.y_intercept
+        linear_piece = torch.where((x >= self.x_intercept) & (x <= 0), m * x + b, torch.tensor(0.0, device=x.device))
+
+        # Polynomial section
+        poly_piece = torch.where(x > 0, x**self.power + self.y_intercept, torch.tensor(0.0, device=x.device))
+
+        # Combine sections
+        return (poly_piece + linear_piece + flat_piece) / self.divisor
+
+    def straight_through(self, x):
+        # Straight-through estimator
+        out = self.forward(x)
+        out.data = self.backward(x.data)
+        return out
+
 
 # SigSoftmax from https://arxiv.org/abs/1805.10829
 class SigSoftmax(nn.Module):
@@ -281,6 +318,31 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
+class Softplus(nn.Module):
+    """ Softmax variant based on arxiv 1805.10829 with added handles for base """
+    def __init__(self, config, dim=-1):
+        super().__init__()
+        self.dim = dim
+        self.softplus = nn.Softplus()
+
+    def forward(self, x):
+
+        return self.softplus(x) / 100.0
+
+
+class Squareplus(nn.Module):
+    """Squareplus activation function.
+       This is a computation friendly version of softplus
+       source: https://arxiv.org/abs/2112.11687
+    """
+
+    def __init__(self, b=4.0*math.log(2)**2):
+        super().__init__()
+        self.b = b
+
+    def forward(self, x):
+        return 0.5 * (x + torch.sqrt(x**2 + self.b))
+
 # Note: we use the built in library for regular softmax
 softmax_dictionary = {
     "consmax": ConSmax,
@@ -288,7 +350,10 @@ softmax_dictionary = {
     "saturatingconsmax": SaturatingConSmax,
     "polymax": Polymax,
     "exppolymax": ExpPolymax,
+    "polymax_quan": PolymaxQuan,
     "softermax": Softermax,
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,
+    "softplus": Softplus,
+    "squareplus": Squareplus,
 }
