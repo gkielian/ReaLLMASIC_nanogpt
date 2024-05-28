@@ -23,8 +23,7 @@ from variations.softmax_variations import softmax_dictionary, Softermax, ConSmax
 from variations.norm_variations import norm_dictionary, LayerNorm, RMSNorm, pRMSNorm, kRMSNorm
 from variations.position_encoding_variations import RotaryEmbedding, ShortRope, SymmetricalOverlapAngularPositions, FIRE
 from variations.activation_variations import SquaredReLU, activation_dictionary
-from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized, linear_dictionary
-from KALnet import KAL_Net as KAN
+from variations.linear_variations import BitLinear1p58, BitLinear, BitLinearOptimized,KAL_Net as KAN, linear_dictionary
 
 def create_shared_param_group(layer_type, config):
     shared_size = None
@@ -84,8 +83,10 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        # self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
-        self.c_attn_q = KAN([config.n_embd, config.n_embd])
+        if config.linear_variant == "KAN":  
+            self.c_attn_q = KAN([config.n_embd, config.n_embd])
+        else:
+            self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
         self.n_head = config.n_head
         if config.n_kv_group == None:
@@ -95,13 +96,14 @@ class CausalSelfAttention(nn.Module):
             self.n_kv_group = config.n_kv_group
 
         self.kv_dim = (config.n_embd // config.n_head) * self.n_kv_group
-        self.c_attn_k = KAN([config.n_embd, self.kv_dim])
-        self.c_attn_v = KAN([config.n_embd, self.kv_dim])
-        # self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        # self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
-        # output projection
-        self.c_proj = KAN([config.n_embd, config.n_embd])
-        # self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        if config.linear_variant == "KAN":  
+            self.c_attn_k = KAN([config.n_embd, self.kv_dim])
+            self.c_attn_v = KAN([config.n_embd, self.kv_dim])
+            self.c_proj = KAN([config.n_embd, config.n_embd])
+        else:
+            self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
+            self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
+            self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
@@ -256,12 +258,17 @@ class MLP(nn.Module):
 
         # Select linear variant
         self.linear_variant = linear_dictionary[config.linear_variant]
-        self.c_fc = self.linear_variant(config.n_embd, 4 * config.n_embd, bias=config.bias)
+        if config.linear_variant == "KAN":
+            self.c_fc = self.linear_variant([config.n_embd, 4 * config.n_embd])
+        else:
+            self.c_fc = self.linear_variant(config.n_embd, 4 * config.n_embd, bias=config.bias)
 
         # Select activation variant
         self.activation_variant = activation_dictionary[config.activation_variant]
-
-        self.c_proj = self.linear_variant(4 * config.n_embd, config.n_embd, bias=config.bias)
+        if config.linear_variant == "KAN":
+            self.c_proj = self.linear_variant([4 * config.n_embd, config.n_embd])
+        else:
+            self.c_proj = self.linear_variant(4 * config.n_embd, config.n_embd, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
 
     def forward(self, x):

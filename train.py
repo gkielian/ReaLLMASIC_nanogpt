@@ -104,12 +104,13 @@ def parse_args():
     model_group.add_argument(
         "--linear_variant",
         type=str,
-        default="linear",
+        default="KAN",
         choices=[
             "linear",
             "bitlinear",
             "bitlinear_1p58",
             "bitlinear_optimized",
+            "KAN",
         ],
     )
 
