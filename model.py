@@ -82,7 +82,7 @@ class CausalSelfAttention(nn.Module):
 
     def __init__(self, config, fire_pos_enc=None):
         super().__init__()
-        assert config.n_embd_main % config.n_head == 0
+        assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
         self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
@@ -101,7 +101,7 @@ class CausalSelfAttention(nn.Module):
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_embd = config.n_embd
+        self.n_embd_table = config.n_embd_table
         self.dropout = config.dropout
         self.window_size = config.window_size
         self.n_embd = config.n_embd
@@ -326,7 +326,6 @@ class Block(nn.Module):
                 x = x + self.mlp(self.ln_2(x))
         return x
 
-
 class GPT(nn.Module):
 
     def __init__(self, config):
@@ -344,24 +343,30 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
+        # Add a new linear layer to scale n_embd_table to n_embd and back
+        self.n_embd = config.n_embd
+        self.n_embd_table = config.n_embd_table
+        self.scale_up = nn.Linear(config.n_embd_table, config.n_embd, bias=False)
+        self.scale_down = nn.Linear(config.n_embd, config.n_embd_table, bias=False)
+        # self.scale_linear_transposed.weight = self.scale_linear.weight.t()
+
         self.transformer = nn.ModuleDict(dict(
-            wte = nn.Embedding(config.vocab_size, config.n_embd),
-            wpe = nn.Embedding(config.block_size, config.n_embd),
+            wte = nn.Embedding(config.vocab_size, config.n_embd_table),
+            wpe = nn.Embedding(config.block_size, config.n_embd_table),
+            sup = self.scale_up,
             drop = nn.Dropout(config.dropout),
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
+            sdown = self.scale_down,
             ln_f = self.norm_variant_output,
         ))
 
-        # Add a new linear layer to scale n_embd to n_embd_main
-        self.n_embd_main = config.n_embd_main
-        self.scale_linear = nn.Linear(config.n_embd, self.n_embd_main)
 
         # Select softmax variant for output layer
         self.softmax_variant_output = config.softmax_variant_output
         if self.softmax_variant_output != "softmax":
             self.softmax_layer_output = softmax_dictionary[config.softmax_variant_output](config)
 
-        self.lm_head = nn.Linear(self.n_embd_main, config.vocab_size, bias=False)
+        self.lm_head = nn.Linear(self.n_embd_table, config.vocab_size, bias=False)
         self.transformer.wte.weight = self.lm_head.weight  # https://paperswithcode.com/method/weight-tying
 
         # Initialize all weights
@@ -405,15 +410,16 @@ class GPT(nn.Module):
         x = None
         if self.config.use_abs_pos_embeddings:
             pos_emb = self.transformer.wpe(pos)  # position embeddings of shape (t, n_embd)
-            x = self.transformer.drop(tok_emb + pos_emb)
+            pos_emb = pos_emb.unsqueeze(0).expand(b, t, -1)  # Modify this line
+            combined_emb = tok_emb + pos_emb  # Add this line
+            x = self.transformer.drop(self.scale_up(combined_emb))  # Modify this line
+
         else:
-            x = self.transformer.drop(tok_emb)
+            x = self.transformer.drop(self.transformer.sup(tok_emb))
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
-
-        # Pass through the new linear layer
-        x = self.scale_linear(x)
+        x = self.transformer.sdown(x)
 
         if targets is not None:
             # If we are given some desired targets, also calculate the loss
