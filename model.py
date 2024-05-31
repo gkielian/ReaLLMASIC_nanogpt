@@ -347,7 +347,8 @@ class GPT(nn.Module):
         self.n_embd = config.n_embd
         self.n_embd_table = config.n_embd_table
         self.scale_up = nn.Linear(config.n_embd_table, config.n_embd, bias=False)
-        self.scale_down = nn.Linear(config.n_embd, config.n_embd_table, bias=False)
+        self.scale_down = nn.Linear(config.n_embd_table, config.n_embd, bias=False)
+        self.scale_up.weight = self.scale_down.weight  # https://paperswithcode.com/method/weight-tying
         # self.scale_linear_transposed.weight = self.scale_linear.weight.t()
 
         self.transformer = nn.ModuleDict(dict(
@@ -419,7 +420,7 @@ class GPT(nn.Module):
         for block in self.transformer.h:
             x = block(x)
         x = self.transformer.ln_f(x)
-        x = self.transformer.sdown(x)
+        x = torch.matmul(x, self.transformer.sdown.weight)
 
         if targets is not None:
             # If we are given some desired targets, also calculate the loss
