@@ -87,7 +87,10 @@ class CausalSelfAttention(nn.Module):
         super().__init__()
         assert config.n_embd % config.n_head == 0
         # key, query, value projections for all heads, but in a batch
-        self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+        if config.linear_variant == "KAN":  
+            self.c_attn_q = KAN([config.n_embd, config.n_embd])
+        else:
+            self.c_attn_q = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
 
         self.n_head = config.n_head
         if config.n_kv_group == None:
@@ -100,6 +103,7 @@ class CausalSelfAttention(nn.Module):
         self.c_attn_k = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
         self.c_attn_v = nn.Linear(config.n_embd, self.kv_dim, bias=config.bias)
         self.c_proj = nn.Linear(config.n_embd, config.n_embd, bias=config.bias)
+
         # regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
