@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import math
+from torch.nn import functional as F
+import torch.quantization
 
 # Softmax base 2, with option to remove max subtraction
 class Softermax(nn.Module):
@@ -368,25 +370,25 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
-class Softplus(nn.Module):
-    """ Softmax variant based on arxiv 1805.10829 with added handles for base """
-    def __init__(self, config, dim=-1):
-        super().__init__()
-        self.dim = dim
-        self.softplus = nn.Softplus()
-        self.softplus_divisor = config.softplus_divisor
-        self.div_by_seq_len = config.div_by_seq_len
+# class Softplus(nn.Module):
+#     """ Softmax variant based on arxiv 1805.10829 with added handles for base """
+#     def __init__(self, config, dim=-1):
+#         super().__init__()
+#         self.dim = dim
+#         self.softplus = nn.Softplus()
+#         self.softplus_divisor = config.softplus_divisor
+#         self.div_by_seq_len = config.div_by_seq_len
 
-    def forward(self, x):
+#     def forward(self, x):
 
-        result = self.softplus(x) / self.softplus_divisor
+#         result = self.softplus(x) / self.softplus_divisor
 
-        # divide by sequence length
-        if self.div_by_seq_len:
-            seq_len = x.shape[self.dim]
-            result = result / seq_len
+#         # divide by sequence length
+#         if self.div_by_seq_len:
+#             seq_len = x.shape[self.dim]
+#             result = result / seq_len
 
-        return result
+#         return result
 
 
 class Squareplus(nn.Module):
@@ -409,6 +411,41 @@ class Squareplus(nn.Module):
             seq_len = x.shape[self.dim]
             result = result / seq_len
 
+        return result
+
+
+class Softplus(nn.Module):
+    """Softmax variant based on arxiv 1805.10829 with added handles for base"""
+    def __init__(self, config, dim=-1, quantization_type='int8'):
+        super().__init__()
+        self.dim = dim
+        self.softplus = nn.Softplus()
+        self.softplus_divisor = config.softplus_divisor
+        self.div_by_seq_len = config.div_by_seq_len
+
+        # Set the quantization type
+        if quantization_type == 'int8':
+            self.qconfig = torch.quantization.get_default_qconfig('fbgemm')
+        elif quantization_type == 'binary':
+            self.qconfig = torch.quantization.default_qconfig
+        else:
+            raise ValueError("Unsupported quantization type. Use 'int8' or 'binary'.")
+
+        # Prepare for quantization
+        self.quant = torch.quantization.QuantStub()
+        self.dequant = torch.quantization.DeQuantStub()
+        self.quantization_type = quantization_type
+
+    def forward(self, x):
+        x = self.quant(x)  # Quantize the input
+        result = self.softplus(x) / self.softplus_divisor
+
+        # Divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        result = self.dequant(result)  # Dequantize the result
         return result
 
 # Note: we use the built in library for regular softmax
