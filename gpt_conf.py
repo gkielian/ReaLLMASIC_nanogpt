@@ -102,6 +102,7 @@ class GPTConfig:
 
     # Layernorm Alternatives and Options
     norm_variant_attn: str = "rmsnorm"
+    norm_variant_mlp: str = "rmsnorm"
     norm_variant_output: str = "rmsnorm"
     bias: bool = False # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
     prmsnorm_pct: float = 0.0625
@@ -114,7 +115,10 @@ class GPTConfig:
     activation_variant: str = "gelu"
 
     # Linear Alternatives
-    linear_variant: str = "linear"
+    linear_variant_attn: str = "linear"
+    linear_variant_gate: str = "linear"
+    linear_variant_mlp: str = "linear"
+    linear_variant_output: str = "linear"
 
     ## Linear Initialization Options
     linear_mean_init: float= 0.0
