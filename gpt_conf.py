@@ -18,6 +18,9 @@ class GPTConfig:
     moe_top_k: int = 2
     moe_router_scheme: str = "softmax"
 
+    # Logging Options
+    softmax_io_logging: bool = False
+
     # Training options
     ## Gradient Checkpointing - More memory efficient (can do long contexts), but is slower
     use_gradient_checkpointing: bool = False
@@ -137,7 +140,7 @@ class GPTConfig:
     linear_std_init: float= 0.02
 
     # Quantizations
-    
+
     ## Embedding Quantizations
     quantize_wte: bool = False
     quantize_wpe: bool = False
@@ -200,13 +203,13 @@ class GPTConfig:
         try:
             with open(filename, 'r') as json_file:
                 config_dict = json.load(json_file)
-            
+
             # Get all field names of the dataclass
             field_names = {f.name for f in fields(cls)}
-            
+
             # Filter the loaded dict to only include valid fields
             filtered_dict = {k: v for k, v in config_dict.items() if k in field_names}
-            
+
             # Create and return a new instance
             return cls(**filtered_dict)
         except FileNotFoundError:
@@ -218,14 +221,14 @@ class GPTConfig:
         except TypeError as e:
             print(f"Error: Invalid data in JSON file. {str(e)}")
             return None
-    
+
     def to_json(self, filename: str):
         """
         Function to save a GPTConfig object as json to be used for later model creation
-        
-        input: 
+
+        input:
         - fout: string = filename of saved config file
-        
+
         """
         conf_dict = asdict(self)
 

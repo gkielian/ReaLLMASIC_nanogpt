@@ -24,8 +24,10 @@ class ConSmax(nn.Module):
         super().__init__()
 
         # Input and Output Logging
-        self.inputs = []
-        self.outputs = []
+        self.softmax_io_logging = config.softmax_io_logging
+        if self.softmax_io_logging:
+            self.inputs = []
+            self.outputs = []
 
         # learnable 'xmax' - beta
         self.beta = nn.Parameter(torch.Tensor([config.consmax_initial_beta]))
@@ -40,12 +42,15 @@ class ConSmax(nn.Module):
           self.consmax_base = config.consmax_base
 
     def forward(self, x):
-        self.inputs = x
-        x = x - self.beta
-        e_x = torch.pow(self.consmax_base, x)
-        outputs = e_x / self.gamma
-        self.outputs = outputs
-        return outputs
+        x_adj = x - self.beta
+        e_x = torch.pow(self.consmax_base, x_adj)
+        result = e_x / self.gamma
+
+        if self.softmax_io_logging:
+            self.inputs = x
+            self.outputs = result
+
+        return result
 
 # Constantmax Quantized
 
@@ -116,17 +121,22 @@ class Strongermax(nn.Module):
         self.subtract_max = config.strongermax_use_xmax
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
-        self.inputs = []
-        self.outputs = []
+        # Input and Output Logging
+        self.softmax_io_logging = config.softmax_io_logging
+        if self.softmax_io_logging:
+            self.inputs = []
+            self.outputs = []
         self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
-        self.inputs = x
+        x_adj = None
         if self.subtract_max:
             max_x = x.max(dim=self.dim, keepdim=True).values
-            x = x - max_x
+            x_adj = x - max_x
+        else:
+            x_adj = x
 
-        result = torch.pow(self.strength, x)
+        result = torch.pow(self.strength, x_adj)
 
         if self.sum_to_1:
             result = result / result.sum(dim=self.dim, keepdim=True)
@@ -136,7 +146,10 @@ class Strongermax(nn.Module):
             result = result / seq_len
 
         result = result / self.divisor
-        self.outputs = result
+
+        if self.softmax_io_logging:
+            self.inputs = x
+            self.outputs = result
 
         return result
 
@@ -157,15 +170,17 @@ class Polymax(nn.Module):
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
-        self.inputs = []
-        self.outputs = []
+
+        self.softmax_io_logging = config.softmax_io_logging
+        if self.softmax_io_logging:
+            self.inputs = []
+            self.outputs = []
 
     def forward(self, x):
         # Overview:
         # Flat section:       -inf < x < x_intercept
         # Linear section:     x_intercept <= x <= 0
         # Polynomial section: 0 < x < inf
-        self.inputs = x
         # Flat section
         flat_piece = torch.where(x < self.x_intercept, torch.tensor(0.0, device=x.device), torch.tensor(0.0, device=x.device))
 
@@ -183,7 +198,9 @@ class Polymax(nn.Module):
             seq_len = x.shape[self.dim]
             result = result / seq_len
 
-        self.outputs = result
+        if self.softmax_io_logging:
+            self.inputs = x
+            self.outputs = result
 
         return result
 
