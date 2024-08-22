@@ -1,0 +1,742 @@
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+WARNING: using slow attention. Flash Attention requires PyTorch >= 2.0
+number of parameters: 123.65M
+No meta.pkl found, assuming GPT-2 encodings...
+
+-face,--
+
+DUKE OF YORK:
+I'll bear and lose myself to him
+The crown him that is now.
+
+QUEEN ELIZABETH:
+I have the king.
+
+DUKE VINCENTIO:
+We respect you, my lord, and shall win your man,
+As true gentlemen, as we bid him
+Which since he is, we will defend you.
+
+DUKE VINCENTIO:
+You shall, fair, here come to appear before
+Your former lord.
+
+FRIAR LAURENCE:
+
+LEONTES:
+Trust him:
+Signs me, my lord, to the head, you will enter
+Against the clouds, and all due's face.
+
+DUKE VINCENTIO:
+How dare you, my lord?
+
+DUKE VINCENTIO:
+He hath made his vow, and sworn to me,
+To keep's his hands from the clouds; and that will
+That he is of this day so.
+
+Provost:
+No, for you, my lord, I'll descend to the Tower.
+
+DUKE VINCENTIO:
+Well, my lord, here lies the wind.
+
+LEONTES:
+I betide with the Volsces and the trees that lie
+And laugh and yondes their fury on
+To breathe the sun or night. This word is all, my lord,
+With the clouds and the earth's west and the sky
+Will be made in a pattern: let me speak.
+Away, my lord, I'll fly.
+
+First Lord:
+Here's the Volsces' ears.
+
+LUCIO:
+Farewell, my lord: come on.
+
+DUKE VINCENTIO:
+Come, enter straight enough;
+Take leave.
+
+SIR STEPHEN:
+Farewell, my lord.
+
+DUKE VINCENTIO:
+Go, and be your hand.
+
+DUKE VINCENTIO:
+We have seen a strange and dangerous villain,
+That now be he hath made his purpose to keep.
+
+DUKE VINCENTIO:
+My lord, my lord, it is come to his grave
+Where all the city, and all the world hath seen.
+---------------
+
+:
+Nurse:
+This is the king, at my charge.
+
+BUCKINGHAM:
+I might I, sir, by the time, if you will you excuse,
+Thou lief that the tale I sent, thou hast so?
+Thou hast said, I pray, I am sorry that thee,
+And now thou, by thy knee, or my worst,
+Thou didst make me be done, to that my heart
+My crown a second tale say.
+
+BUCKINGHAM:
+My lord, I am sorry, and God, but I humbly blame thee.
+
+BUCKINGHAM:
+Father, it is a blest for blood, and I am.
+
+GLOUCESTER:
+My fault, my heart is broken.
+
+BUCKINGHAM:
+God-bed:
+O, be not the one that needs no more;
+The holy man that hath done more grace than his
+The grossest blood and blood.
+
+BUCKINGHAM:
+If you will it be, then, break that I shall
+Be thou a good man, and do not break the business.
+
+BUCKINGHAM:
+I am sorry to bethink me, for I was your son.
+I was deeply offended when I came as a boy
+Speak to the ear to the ear of the king.
+
+BUCKINGHAM:
+You are so much a bawdy; I did hate you
+And that I could not utter your father's son.
+
+GLOUCESTER:
+I am sorry; I am sorry: for that, if it be not
+Then give me this hand against the sword
+That knocks the heart of the ear; and if there be a man
+Not wanting it should be a son, then,
+Thus angry with such a strike at his mother,
+That I could have yielded my father's blood upon the king.
+
+BUCKINGHAM:
+Then I will be it as good as the sword,
+And since it is my request is to be executed.
+Rivers had I no better.
+
+BUCKINGHAM:
+And, Lord:
+I have done so too much in your honour.
+
+BUCKINGHAM:
+Have I been at your father, took your man
+Before you did this wound, in this present offence,
+---------------
+
+
+Amen, for she beheaded princely!
+
+ROMEO:
+Hark, how now, ho!
+
+ROMEO:
+An you, the one, the world of my maid!
+
+ROMEO:
+What is the matter for this?
+
+ROMEO:
+A word:
+A dozen sun! let me speak.
+
+Nurse:
+Nurse!
+
+ROMEO:
+I have worn too.
+
+ROMEO:
+So, then I'll ne'er bid my house:
+My father's house on my bed and he left me
+A man was worn away.
+
+ROMEO:
+O, what wish'd the house, for our lord?
+
+Nurse:
+I would as she had; but she was too fond of the
+child, as a maid, who had been a prophet,
+That I did send over a pair of her.
+
+ROMEO:
+Unmanner'd a maid, a maid that was married to Romeo,
+And had he married a maid?
+Nurse: indeed, then let him be married to her;
+Why, then he was a maid.
+
+ROMEO:
+Now now, what is that he is a maid?
+I took your husband too?
+
+Nurse:
+He's married; he's the wife; but, as you
+has given to him.
+
+ROMEO:
+A maid is a maid; a maid is a maid in her
+complaint of her grave; and the maid
+the maid is now a maid of a maid.
+
+Nurse:
+Nurse, tell me she's a maid is a maid,
+which is a maid!
+
+Nurse:
+A maid is a maid, not a maid: a maid is a maid, a maid
+complaint is a maid of a maid, but then
+a maid is married, a maid, a maid, a maid is a maid
+a maid and a maid is a maid, and a maid, a maid
+woman is a mistress, a maid is a maid, a maid is a maid, a maid, a maid, a maid,
+a maid, a maid's
+a maid, and four-purse was a maid, a maid, a maid has a maid.
+
+Nurse:
+A maid? a maid is a maid is a maid
+---------------
+
+
+you do you live, and be the first to be dead
+Of him, your father's name: I
+And never shall be his heir to the world.
+
+Thou wilt thou do it on me?
+
+RICHARD:
+And for what purpose of this, I will with that be.
+
+QUEEN MARGARET:
+I'll put you to the ground, let me be the
+To bury the body: I have on,' quoth not enter?
+
+JOHN OF GAUNT:
+Thou must be the one, for her; it is a forfeit
+That from thee, by the very body, thou
+Shall take your pains to be king: thou shalt be buried.
+
+QUEEN:
+Then marry thy child shall be my king.
+
+RICHARD:
+In my power thou shalt be gone.
+
+QUEEN MARGARET:
+No, till thou wilt be king!
+
+RICHARD:
+What is the matter with you?
+
+RICHARD:
+Drown, I'll turn to the tomb, and the dead
+To meet with thee; for I will go.
+
+RICHARD:
+O, I'll be with you, my beloved son.
+
+QUEEN MARGARET:
+What is it with your lord to have me?
+
+RICHARD:
+Why, mother, how I am now, I die!
+
+QUEEN MARGARET:
+Come, thou king; I will be dead.
+
+QUEEN MARGARET:
+Darling is dead, and not I.
+
+BEN MARGARET:
+An thou wast slain, die, my son,
+For my blood not my father's name,
+I will hence to die.
+
+RICHARD:
+Why, then, farewell, wherefore death be thy life.
+
+RICHARD:
+Wherefore live my son? where is he?
+
+QUEEN MARGARET:
+He is dead, by the time when Angelo died.
+
+ESCannot die, my son, if thou wilt be dead.
+
+RICHARD:
+Let me die; I'll die.
+
+RICHARD:
+Let me die.
+
+RICHARD:
+Say 'fore death,
+---------------
+
+ in,
+Lart for he was seen
+A bed of night more
+What's worth of Harry had.
+
+KING RICHARD III:
+I'll come, sir.
+
+Lords, sir, will you?
+
+KING RICHARD III:
+Sir, I will go, sir, that I will go with you:
+I am coming.
+
+Lord, lords, lords, are you lords, to be with us?
+
+LEONTES:
+You have all at me?
+
+HENRY PERCY:
+Sir, sir, sir, these are you?
+
+LEONTES:
+A gentleman hath sent to give you a hand
+To give me a goodly report.
+
+KING RICHARD III:
+Sir, I have seen him look to-night.
+
+PAULINA:
+Sir, for the king hath sworn not you
+In good cause to appear in the courts of the Tower.
+So I would not go hence.
+
+KING RICHARD III:
+Go by; thou shalt not be gone.
+
+LEONTES: he was lately to go to Rome;
+And yet I am not there, I was then supposed
+In Rome, that he had some letter:
+Let me tell the Earl of his brother, there was
+The king's son not at Rome; I know.
+
+KING RICHARD III:
+Madam, he hath, full of friends, and, if any is not
+That is, by any thing that be true.
+
+LEONTES:
+So hath he gone straight: we shall make us acquainted
+As I was drunk in Rome.
+
+KING RICHARD III:
+Sir, what is the nature of his suit?
+They say he is the God's son: I will not
+To be the hand of a wife of a duke: I'll not
+The wife of his wife, and my love to my son,
+Alas, his daughter is too young, with her;
+The child that shall be to be made, I will prove
+To be the true Christian king, if
+And so be it becomes the prince's.
+
+KING RICHARD III:
+Go, sir, come, my lord; I would you go.
+
+LEONTES:
+Sir, be not so, as in my heart as I am;
+---------------
+
+ first:
+You shall be stood here to do them,
+To see them, a-bed: be not me but a saint,
+Their most obedient: I know's aunts.
+
+Nurse:
+I do find some of you, sir, and be patient.
+
+First Lady:
+Ho! will you keep an anon's oath;
+the Volts are low; your blood
+Will be a burden is your bawd.
+
+FLORIZEL:
+I'll be the Volscian liege, and be gone.
+
+FLORIZEL:
+Pray I have seen your goodly father
+I' the grave once, and I have seen him.
+
+FLORIZEL:
+I hope, good night, gentle Lady Vols!
+
+FLORIZEL:
+I hope you have.
+
+FLORIZEL:
+Be not but very odd when with you have
+your first.
+
+FLORIZEL:
+I'll read to him so, and he will do
+experience in his business.
+
+FLORIZEL:
+Well, I hope.
+
+FLORIZEL:
+To be of good men, as seem.
+
+FLORIZEL:
+Well, I may be cured, to him.
+
+FLORIZEL:
+I have my heart now!
+
+FLORIZEL:
+Look, you that be not grave as you have quit'd
+to him. They are too many more.
+
+Shepherd:
+Why, my lord?
+
+FLORIZEL:
+I pray, I am not angry.
+
+FLORIZEL:
+Why, I will be so!
+
+FLORIZEL:
+I am go all to get my Lord of them and
+not to be a husband and his children.
+
+Shepherd:
+Now, Lady, I am come to bed.
+
+FLORIZEL:
+O, my lord! Come hither; go, go, go!
+
+Lady:
+Here is the man, uncles?
+
+FLORIZEL:
+Come, come, away.
+
+FLORIZEL:
+Go, help!
+Go, ho! I know, I am sure, I am gone
+to-night.
+
+FLORIZEL:
+Stay, I will not go
+---------------
+
+ before to the end;
+And, as you
+And yet, being a feck-lady now,
+And dost not aught of the soul, but one that
+Is hence to meddle-nightly to have me
+And that I have an heir, to be a traitor?
+
+ANGELBRAY:
+Madam, I call'd my brother now to think
+The contents of a little plot of his.
+
+ANGELO:
+And for that I am envious, as he did
+Happily, to have some time to make me
+Upon the traitor.
+
+ANGELO:
+Madam?
+No, no, no, no, no; my Lord.
+
+Lest, the man was too young and in the manner,
+Hath you were all in all such a day
+At the first time the water-time-time told the next one,
+Would have you not already done it?
+
+ANGELO:
+Of this, the hand that I have told me would take it
+'Tick the crown that would add a kiss.
+
+ANGELO:
+I'll read their faces, whereupon the clouds
+Would be your cheeks-sick.
+
+ANGELO:
+No, no, no, no, I will;
+If I had 't write about this till I was with you.
+
+POMPEY:
+Of all my heart, stay and leave them,
+The gods, and myself, and not with me;
+In thy own best safety.
+
+ANGELO:
+Where are they?
+
+ANGELO:
+They cannot, sir, therefore, are gone with the gods.
+
+ELO:
+I have my part; but I hear no more.
+
+ANGELO:
+O, speak, tell me where?
+
+ANGELO:
+Pray me, come: I go tell tales in the Tower,
+And tell them that you are in.
+
+ANGELO:
+Go, help me!
+Hear myself, come to me: the messenger is dead;
+But I am wounded, one of the Volsces,
+And you do mend my face to the axe: here's not
+I call them.
+
+ELBOW:
+O' day is the way: come to be gone.
+
+---------------
+
+SIRGORY:
+O, how far is the worse, what is this?
+
+HASTINGS: he's one in the south-shore?
+
+HENRY BOLINGBROKE:
+Withdraw thy heart as many friends to his country's
+Than I came along; and he that I am.
+
+BUSHY ANNE:
+O, but I am well persuaded
+That dreams are at an a mind to succeed
+Must hold him here with him in one word with him.
+
+HENRY BOLINGBROKE:
+Hold it with me by me.
+
+SAMPSON:
+Then here comes the day for the death of our lord.
+
+HENRY BOLINGBROKE:
+O, till a word, wheresoe!
+
+HENRY BOLINGBROKE:
+But too soon wake up to vent your eyes.
+
+HENRY BOLINGBROKE:
+Go on! the morrow to make him, and let's go.
+
+HENRY BOLINGBROKE:
+Nay, and here comes the Duke of Hereford.
+
+HENRY BOLINGBROKE:
+Come, my lord, get him to see him home.
+
+SAMPSON:
+It will be thirty days in my dreams.
+
+HENRY BOLINGBROKE:
+Come on, and meet my brother Henry.
+
+Second Gentleman:
+Let's out. Come, go.
+
+PETRICHARD:
+I thank you; I know he hates me, and I am.
+
+SAMPSON:
+Here come my lord.
+
+HENRY BOLINGBROKE:
+O, your heart forsake.
+
+SAMPSON:
+Barewell; I was about to bed.
+
+SAMPSON:
+So the morrow to his grave, and then fell asleep.
+
+HENRY PERCY:
+Marry, sir, I pray you of this grave.
+
+PETRUCHESS OF YORK:
+He is dead now to life, and yet my bones.
+
+SAMPSON:
+Was he dead, he died when he came to-day?
+
+HENRY BOLINGBROKE:
+He is dead, and that time
+---------------
+
+ is the queen, but with a friend,
+And as a happy and as the duke.
+
+BRUTIO:
+O, the highness of his own.
+
+Second Citizen:
+Why, my lord.
+
+First Citizen:
+No man of Clarence, my country.
+
+ANGELO:
+Why, no, but be it so, if it be no more.
+
+First Citizen:
+Where is a second citizen, who knows better.
+
+Third Citizen?
+First Citizen:
+Why, my lord?
+
+First Citizen:
+Sail him.
+
+Second Citizen:
+Then, on the Duke of Hereford,
+I came to Saint Peter's kinsman; who, when they were
+Here come from whence we came?
+
+First Citizen:
+O, that's not good; but it was a very drow of strength.
+
+Second Citizen:
+Well, so do you like what you say.
+
+First Citizen:
+You are not a duke, and is not a duke.
+
+Second Citizen:
+Now, this was a duke, Henry the duke is now dead.
+
+Third Citizen:
+An duke is a duke?
+
+Third Citizen:
+Not duke.
+
+Second Citizen:
+A duke was Duke of Buckingham;
+He was Duke of Norfolk: he was Duke of
+A noble birth, and is Duke of Hereford;
+And now, too, anon! Why duke is Duke of Hereford?
+
+Third Citizen:
+'He was Duke of Norfolk.
+
+Third Citizen:
+Nay, I am far off again:
+The duke's a duke dies still: farewell.
+
+Third Citizen:
+'Twas duke is to live a duke, although he be buried.
+
+Second Citizen:
+He is not a duke: one that duke dead; and, as we know not
+For the duke dead, we'll be buried here.
+So, in the duke is the duke dead;
+In doing duke's grave, and so the duke dead; and in the duke dead;
+So in one, because he should be dead, and buried too;
+He is not buried to see that duke alive: we know 'tis he is dead.
+
+Third Citizen:
+
+---------------
+
+ on him to be gone.
+
+BRUTUS:
+Come, do not trouble him about it.
+
+LUCENTIO:
+Most beloved wife, be done!
+
+CORIOLANUS:
+Good friends, my good lord,
+Have faith with you well I have in you.
+
+First Senator:
+And he shall, good lord.
+
+CORIOLANUS:
+
+CORIOLANUS:
+Goodly, good sir; our instruction,
+I do have been disinherited.
+
+CORIOLANUS:
+See, you have dine with your face.
+
+CORIOLANUS:
+I have, my love's a pity
+And most noble country's pleasure,
+I'll never more joy than I have weeping;
+For, wishing a husband's love, be it.
+
+CORIOLANUS:
+Give me your hearts, help, and not for this stay
+To hear our loved one, being your country's.
+
+COMINIUS:
+Take your eyes
+Against all the senate and their consuls
+Of your own choice.
+
+SICINIUS:
+What, our hearts'er you have talk'd of?
+
+CORIOLANUS:
+Speak your goodly: you may speak of it, as the
+wife, if I pray, not mine own lady,
+Suppose the times, shall not speak. I have
+Your voices and your voices are for you,
+To seek to have me to do you.
+
+CORIOLANUS:
+Plant, say you shall not.
+
+SICINIUS:
+Plays, your consul,
+That I have, I will't with you and consort the
+Of me.
+
+SICINIUS:
+Be it as I have said, for you.
+
+BRUTUS:
+I will be your policy,
+And do not in the senate: you shall know,
+There is no consul. I care not your consul,
+I have beg your consort.
+
+SICINIUS:
+O' the noble consul, I'll
+Be of consul.
+
+SICINIUS:
+It is best
+With most worthy consul
+Upon your consul, to be consul and consul
+
+---------------
