@@ -14,7 +14,10 @@ from torchinfo import summary
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
+
 from rich import print
+from rich.progress import Progress
+
 import torch
 from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -192,9 +195,9 @@ def parse_args():
 
     ### Whether activations should be saved
     model_group.add_argument("--store_activations", action=argparse.BooleanOptionalAction, default=False, help="whether the activations should be saved as a buffer and updated through training")
-    
-    ## Linear Attn Weight Quantization Precision and Method 
-    
+
+    ## Linear Attn Weight Quantization Precision and Method
+
     ### Default methods and precisions
     model_group.add_argument("--quantize_linear_method", type=str, default="affine_quant", choices=quant_methods, help="function used for linear quantization")
     model_group.add_argument("--quantize_linear_bits", type=int, default=8, help="number of bits for linear quantization")
@@ -706,38 +709,127 @@ class Trainer:
             for head in range(self.args.n_head):
                 graph_y_labels.append(f"Layer {layer} Head {head}")
 
-        while True:
-            lr = self.get_lr(self.iter_num) if self.args.decay_lr else self.args.learning_rate
-            for param_group in self.optimizer.param_groups:
-                param_group['lr'] = lr
+        # Create the progress bar
+        progress = Progress()
+        with progress:
 
-            if self.iter_num % self.args.eval_interval == 0 and self.master_process:
-                losses = self.estimate_loss()
-                print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-                self.log_metrics(losses, lr, running_mfu, self.iter_num)
+            task_id = progress.add_task("[green]Training...", total=(self.args.max_iters - self.iter_num))
 
-                if math.isnan(losses["val"]):
-                    checkpoint = {
-                        'model': self.raw_model.state_dict(),
-                        'optimizer': self.optimizer.state_dict(),
-                        'model_args': self.model_args,
-                        'iter_num': self.iter_num,
-                        'best_val_loss': self.best_val_loss,
-                        'nan_iter_num' : 0,
-                        'nan' : True,
-                        'config': vars(self.args),
-                    }
-                    torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                if losses['val'] < self.best_val_loss or self.args.always_save_checkpoint:
-                    if losses['val'] < self.best_val_loss:
-                        self.iter_num_best_val_loss = self.iter_num
-                        self.best_val_loss = losses['val']
-                        # Save best validation loss
-                        with open(os.path.join(self.args.out_dir, 'best_val_loss_and_iter.txt'), "w") as best_loss_file:
-                            best_loss_file.write(str(self.best_val_loss.item())+","+str(self.iter_num))
-                        # Reset early exit counter
-                        num_steps_with_worse_loss = 0
-                    if self.iter_num > 0:
+            while True:
+                lr = self.get_lr(self.iter_num) if self.args.decay_lr else self.args.learning_rate
+                for param_group in self.optimizer.param_groups:
+                    param_group['lr'] = lr
+
+                if self.iter_num % self.args.eval_interval == 0 and self.master_process:
+                    losses = self.estimate_loss()
+                    print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+                    self.log_metrics(losses, lr, running_mfu, self.iter_num)
+
+                    if math.isnan(losses["val"]):
+                        checkpoint = {
+                            'model': self.raw_model.state_dict(),
+                            'optimizer': self.optimizer.state_dict(),
+                            'model_args': self.model_args,
+                            'iter_num': self.iter_num,
+                            'best_val_loss': self.best_val_loss,
+                            'nan_iter_num' : 0,
+                            'nan' : True,
+                            'config': vars(self.args),
+                        }
+                        torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+                    if losses['val'] < self.best_val_loss or self.args.always_save_checkpoint:
+                        if losses['val'] < self.best_val_loss:
+                            self.iter_num_best_val_loss = self.iter_num
+                            self.best_val_loss = losses['val']
+                            # Save best validation loss
+                            with open(os.path.join(self.args.out_dir, 'best_val_loss_and_iter.txt'), "w") as best_loss_file:
+                                best_loss_file.write(str(self.best_val_loss.item())+","+str(self.iter_num))
+                            # Reset early exit counter
+                            num_steps_with_worse_loss = 0
+                        if self.iter_num > 0:
+                            checkpoint = {
+                                'model': self.raw_model.state_dict(),
+                                'optimizer': self.optimizer.state_dict(),
+                                'model_args': self.model_args,
+                                'iter_num': self.iter_num,
+                                'best_val_loss': self.best_val_loss,
+                                'nan_iter_num' : None,
+                                'nan' : None,
+                                'config': vars(self.args),
+                            }
+                            print(f"saving checkpoint to {self.args.out_dir}")
+                            # Save checkpoint
+                            torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+                    if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
+                        print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
+                        plot_statistics(self.args, self.stats, graph_y_labels)
+                        break
+                    if losses['val'] > self.best_val_loss:
+                        num_steps_with_worse_loss += 1
+
+                if self.iter_num == 0 and self.args.eval_only:
+                    break
+
+                for micro_step in range(self.args.gradient_accumulation_steps):
+                    if self.ddp:
+                        self.model.require_backward_grad_sync = (micro_step == self.args.gradient_accumulation_steps - 1)
+
+                    with self.ctx:
+                        logits, loss = self.model(self.X, self.Y)
+                        loss = loss / self.args.gradient_accumulation_steps
+
+                    self.X, self.Y = self.get_batch('train')
+
+                    self.scaler.scale(loss).backward()
+
+                if self.args.grad_clip != 0.0:
+                    self.scaler.unscale_(self.optimizer)
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
+
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+
+                self.optimizer.zero_grad(set_to_none=True)
+
+                t1 = time.time()
+                dt = t1 - t0
+                t0 = t1
+                if self.iter_num % self.args.log_interval == 0 and self.master_process:
+                    lossf = loss.item() * self.args.gradient_accumulation_steps
+                    if local_iter_num >= 5:
+                        mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
+                        running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+                    print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
+                    if math.isnan(lossf):
+                        if self.args.save_nan_checkpoint:
+                            checkpoint = {
+                                'model': self.raw_model.state_dict(),
+                                'optimizer': self.optimizer.state_dict(),
+                                'model_args': self.model_args,
+                                'iter_num': self.iter_num_best_val_loss,
+                                'best_val_loss': self.best_val_loss,
+                                'nan_iter_num' : self.iter_num,
+                                'nan' : True,
+                                'config': vars(self.args),
+                            }
+                            print(f"saving checkpoint to {self.args.out_dir}")
+                            torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+                        sys.exit("Exiting training loss is NaN")
+                    self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
+
+
+                create_statistics(self, graph_y_labels)
+
+
+                self.iter_num += 1
+                local_iter_num += 1
+                # Update progress bar
+                progress.update(task_id, advance=1)
+
+                # End of training actions
+                if self.iter_num > self.args.max_iters:
+                    plot_statistics(self.args, self.stats, graph_y_labels)
+                    if self.args.only_save_checkpoint_at_end:
                         checkpoint = {
                             'model': self.raw_model.state_dict(),
                             'optimizer': self.optimizer.state_dict(),
@@ -749,98 +841,17 @@ class Trainer:
                             'config': vars(self.args),
                         }
                         print(f"saving checkpoint to {self.args.out_dir}")
-                        # Save checkpoint
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
-                    print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
-                    plot_statistics(self.args, self.stats, graph_y_labels)
                     break
-                if losses['val'] > self.best_val_loss:
-                    num_steps_with_worse_loss += 1
 
-            if self.iter_num == 0 and self.args.eval_only:
-                break
+            if self.args.tensorboard_log:
+                self.writer.flush()
+                self.writer.close()
 
-            for micro_step in range(self.args.gradient_accumulation_steps):
-                if self.ddp:
-                    self.model.require_backward_grad_sync = (micro_step == self.args.gradient_accumulation_steps - 1)
-
-                with self.ctx:
-                    logits, loss = self.model(self.X, self.Y)
-                    loss = loss / self.args.gradient_accumulation_steps
-
-                self.X, self.Y = self.get_batch('train')
-
-                self.scaler.scale(loss).backward()
-
-            if self.args.grad_clip != 0.0:
-                self.scaler.unscale_(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.args.grad_clip)
-
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-
-            self.optimizer.zero_grad(set_to_none=True)
-
-            t1 = time.time()
-            dt = t1 - t0
-            t0 = t1
-            if self.iter_num % self.args.log_interval == 0 and self.master_process:
-                lossf = loss.item() * self.args.gradient_accumulation_steps
-                if local_iter_num >= 5:
-                    mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
-                    running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-                print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
-                if math.isnan(lossf):
-                    if self.args.save_nan_checkpoint:
-                        checkpoint = {
-                            'model': self.raw_model.state_dict(),
-                            'optimizer': self.optimizer.state_dict(),
-                            'model_args': self.model_args,
-                            'iter_num': self.iter_num_best_val_loss,
-                            'best_val_loss': self.best_val_loss,
-                            'nan_iter_num' : self.iter_num,
-                            'nan' : True,
-                            'config': vars(self.args),
-                        }
-                        print(f"saving checkpoint to {self.args.out_dir}")
-                        torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                    sys.exit("Exiting training loss is NaN")
-                self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
-
-
-            create_statistics(self, graph_y_labels)
-
-
-            self.iter_num += 1
-            local_iter_num += 1
-
-            # End of training actions
-            if self.iter_num > self.args.max_iters:
-                plot_statistics(self.args, self.stats, graph_y_labels)
-                if self.args.only_save_checkpoint_at_end:
-                    checkpoint = {
-                        'model': self.raw_model.state_dict(),
-                        'optimizer': self.optimizer.state_dict(),
-                        'model_args': self.model_args,
-                        'iter_num': self.iter_num,
-                        'best_val_loss': self.best_val_loss,
-                        'nan_iter_num' : None,
-                        'nan' : None,
-                        'config': vars(self.args),
-                    }
-                    print(f"saving checkpoint to {self.args.out_dir}")
-                    torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                break
-
-        if self.args.tensorboard_log:
-            self.writer.flush()
-            self.writer.close()
-
-        if self.args.wandb_log and self.master_process:
-            import wandb
-            wandb.log({"finished": True})
-            wandb.finish()
+            if self.args.wandb_log and self.master_process:
+                import wandb
+                wandb.log({"finished": True})
+                wandb.finish()
 
 def main():
     args, model_group, training_group, logging_group = parse_args()
