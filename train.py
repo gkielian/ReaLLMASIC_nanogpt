@@ -637,7 +637,7 @@ class Trainer:
         if it > self.args.lr_decay_iters:
             return self.args.min_lr
         decay_ratio = (it - self.args.warmup_iters) / (self.args.lr_decay_iters - self.args.warmup_iters)
-        assert 0 <= decay_ratio <= 1e 
+        assert 0 <= decay_ratio <= 1
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
         return self.args.min_lr + coeff * (self.args.learning_rate - self.args.min_lr)
 
