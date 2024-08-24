@@ -9,8 +9,7 @@ import shutil
 import sys
 import time
 
-from torchinfo import summary
-
+from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks, print_model_tree
 import matplotlib.pyplot as plt
 import numpy as np
 import plotly.graph_objects as go
@@ -23,6 +22,7 @@ from torch.distributed import destroy_process_group, init_process_group
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.tensorboard import SummaryWriter
 from statistics_util.statistic_plots import initialize_statistics, plot_statistics, create_statistics
+from variations.model_variations import model_variation_dictionary
 
 from model import GPT, GPTConfig
 
@@ -91,7 +91,7 @@ def parse_args():
     model_group.add_argument("--norm_variant_output", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm"])
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
     model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms" )
-    model_group.add_argument("--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms" )
+    model_group.add_argument(Update statistic_plots.py"--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms" )
     model_group.add_argument("--krmsnorm_quantize_type", type=str, default="none", choices=["int8", "int16", "none"])
     model_group.add_argument('--krmsnorm_enable_gain', default=True, action=argparse.BooleanOptionalAction, help="include gain in kRMSNorm")
     model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
@@ -216,7 +216,7 @@ def parse_args():
     model_group.add_argument("--quantize_linear_attn_proj_bits", type=int, default=None, help="number of bits for c_proj in attention quantization")
 
     #### Overrides for Linear MLP Weight Quantization Precision and Method
-    model_group.add_argument("--quantize_linear_mlp_up_method", type=str, default=None, choices=quant_methods, help="function used for mlp_up quantization")
+    model_group.add_argumentUpdate statistic_plots.py("--quantize_linear_mlp_up_method", type=str, default=None, choices=quant_methods, help="function used for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_up_bits", type=int, default=None, help="number of bits for mlp_up quantization")
     model_group.add_argument("--quantize_linear_mlp_down_method", type=str, default=None, choices=quant_methods, help="function used for mlp_down quantization")
     model_group.add_argument("--quantize_linear_mlp_down_bits", type=int, default=None, help="number of bits for mlp_down quantization")
@@ -242,6 +242,7 @@ def parse_args():
     softmax_variations = [
         "saturatingconsmax",
         "consmax",
+        "consmax_v2",
         "consmax_quan",
         "polymax",
         "relumax",
@@ -267,6 +268,9 @@ def parse_args():
     model_group.add_argument('--consmax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--consmax_base", type=float, default=2.0)
 
+    ### Special Options for ConSmaxV2
+    model_group.add_argument("--consmax_per_head", default=True, action=argparse.BooleanOptionalAction)
+
     ### Special Options for SaturatingConSmax
     model_group.add_argument("--consmax_saturation", type=float, default=11.0, help="point where we transition from consmax to linear saturatingconsmax, defaults to 11 to approximate e^x sat for fp16")
     model_group.add_argument('--consmax_learnable_beta', default=True, action=argparse.BooleanOptionalAction)
@@ -290,10 +294,12 @@ def parse_args():
     model_group.add_argument('--strongermax_sum_to_1', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
     model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--strongermax_xmax_guess', type=float, default=None)
+    model_group.add_argument('--strongermax_overflow_recompute', default=False, action=argparse.BooleanOptionalAction)
 
     ### ExpPolymax Options
     model_group.add_argument('--exppolymax_use_euler_base', default=True, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--exppolymax_base", type=float, default="4")
+    model_group.add_argument("--exppolymax_base", type=float, default=4.0)
     model_group.add_argument("--exppolymax_y_intercept", type=float, default=1.0)
     model_group.add_argument("--exppolymax_power", type=float, default=2.0)
     model_group.add_argument("--exppolymax_divisor", type=float, default=1000.0)
@@ -342,6 +348,12 @@ def parse_args():
     logging_group.add_argument('--timestamp', default='', type=str)
     logging_group.add_argument('--save_nan_checkpoint', default=False, action=argparse.BooleanOptionalAction)
 
+    # Module And Parameter Logging and Plots of Summary Statistics
+    model_group.add_argument('--softmax_io_logging', default=False, action=argparse.BooleanOptionalAction, help="logs inputs and outputs of supported softmaxes")
+    model_group.add_argument('--consmax_beta_gamma_logging', default=False, action=argparse.BooleanOptionalAction, help="logs beta and gamma")
+    logging_group.add_argument('--create_statistics', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--plot_statistics', default=False, action=argparse.BooleanOptionalAction)
+
     # CSV logging
     logging_group.add_argument('--csv_log', default=True, action=argparse.BooleanOptionalAction)
     logging_group.add_argument('--csv_dir', default='csv_logs', type=str)
@@ -362,19 +374,13 @@ def parse_args():
     logging_group.add_argument('--save_config_json', type=str, help="Option to save model parameters as new config json file")
 
     # Visualization args
-    logging_group.add_argument('--statistic', choices=[
-    'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min',
-    'output_mean', 'output_median', 'output_stdev', 'output_max', 'output_min', 'all_stats', 'input_all','output_all'
-     ], default='input_mean', help='Select one or all statistics to display, e.g., --statistic input_min, or --statistic all_stats')
-    logging_group.add_argument('--graph_type', choices=[
-    "heatmap", "plot", "boxplot", "all"
-     ], default='no_graph', help='Select one of the graph types to display, e.g., --graph_type heatmap, or --graph_type plot')
+    logging_group.add_argument('--statistic', choices=[ 'input_mean', 'input_median', 'input_stdev', 'input_max', 'input_min', 'output_mean', 'output_median', 'output_stdev', 'output_max', 'output_min', 'all_stats', 'input_all','output_all' ], default='input_mean', help='Select one or all statistics to display, e.g., --statistic input_min, or --statistic all_stats')
+    logging_group.add_argument('--graph_type', choices=[ "heatmap", "plot", "boxplot", "all" ], default='no_graph', help='Select one of the graph types to display, e.g., --graph_type heatmap, or --graph_type plot')
     logging_group.add_argument('--box_plot_interval', default=1000, type=int, help='Instead of using mean/median/stdev statistics, create box plot of all input/output values at certain intervals of iteration')
-    logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'],
-     default='', help='Select input or output statistic to display in boxplot')
+    logging_group.add_argument('--box_plot_statistic', choices=['input', 'output', 'all'], default='', help='Select input or output statistic to display in boxplot')
 
     # Model Parameter Distribution
-    logging_group.add_argument('--print_block_summary', default=False, action=argparse.BooleanOptionalAction)
+    logging_group.add_argument('--print_model_info', default=True, action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
 
@@ -467,48 +473,52 @@ class Trainer:
             self.model = GPT(gptconf)
             self.iter_num = 0 # for starting from scratch
             self.best_val_loss = 1e9 # really big number
-        elif self.args.init_from == 'resume':
-            ckpt_path = os.path.join(self.args.out_dir, 'ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)
+        elif self.args.init_from == 'resume' or self.args.init_from == 'prev_run':
+            if self.args.init_from == 'resume':
+                ckpt_path = os.path.join(self.args.out_dir, 'ckpt.pt')
+                checkpoint = torch.load(ckpt_path, map_location=self.device)
+                self.iter_num = checkpoint['iter_num']
+            else:
+                ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
+                checkpoint = torch.load(ckpt_path, map_location=self.device)
+                self.iter_num = 0
+
+            # we should enforce that during resume training, the identical model args are used
             checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
-                self.model_args[k] = checkpoint_model_args[k]
+            self.model_args = checkpoint_model_args
+
+            # support for changing select params from resume (eg. for finetuning) based on cmd-line args entered (checks if diff than defaults)
+            altered_model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions if action.default != getattr(self.args, action.dest)}
+            for k in altered_model_args:
+                self.model_args[k] = altered_model_args[k]
+
             self.load_data()
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT(gptconf)
-            ## TODO: Add means here to udpate the resume for: block size (finetune for longer context), rotary type, rope length, softmax type, etc.
+
             ## TODO: Add ability here to swap WTE factors.
             state_dict = checkpoint['model']
             for k,v in list(state_dict.items()):
                 if k.startswith('_orig_mod.'):
                     state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
             self.model.load_state_dict(state_dict)
-            self.iter_num = checkpoint['iter_num']
             self.best_val_loss = checkpoint['best_val_loss']
+
         elif self.args.init_from.startswith('gpt2'):
-            override_args = dict(dropout=self.args.dropout)
+
+            assert self.args.gpt2_type in model_variation_dictionary
+
             self.iter_num = 0 # for starting from scratch
             self.best_val_loss = 1e9 # really big number
-            self.model = GPT.from_pretrained(self.args.gpt2_type, override_args)
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size']:
-                self.model_args[k] = getattr(self.model.config, k)
-            self.load_data()
-        elif self.args.init_from == 'prev_run':
-            ckpt_path = os.path.join(self.args.prev_run_ckpt, 'ckpt.pt')
-            checkpoint = torch.load(ckpt_path, map_location=self.device)
-            checkpoint_model_args = checkpoint['model_args']
-            for k in ['n_layer', 'n_head', 'n_kv_group', 'n_embd', 'block_size', 'bias', 'vocab_size', 'window_size', 'gate']:
-                self.model_args[k] = checkpoint_model_args[k]
-            self.load_data()
+
+            variation_dict = model_variation_dictionary[self.args.gpt2_type]
+            # NOTE: the hierarchy of parameters goes: 1)variation_dict >> 2)cmd-line args >> 3)GPTConfig defaults
+            for k in variation_dict:
+                self.model_args[k] = variation_dict[k]
+
             gptconf = GPTConfig(**self.model_args)
-            self.model = GPT(gptconf)
-            state_dict = checkpoint['model']
-            for k,v in list(state_dict.items()):
-                if k.startswith('_orig_mod.'):
-                    state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
-            self.model.load_state_dict(state_dict)
-            self.iter_num = 0
-            self.best_val_loss = checkpoint['best_val_loss']
+            self.model = GPT.from_pretrained(gptconf, model_type=self.args.gpt2_type)
+            self.load_data()
 
         if self.args.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.args.block_size)
@@ -517,12 +527,11 @@ class Trainer:
         self.model.to(self.device)
 
         # Print the model summary
-        summary(self.model)
-
-        if self.args.print_block_summary:
-            for idx, block in enumerate(self.model.transformer.h):
-                print(f"Summary for Block {idx + 1}:")
-                summary(block)
+        if self.args.print_model_info:
+            print_summary(self.model)
+            print_model_blocks(self.model)
+            print_module_structure(self.model)
+            print_model_tree(self.model, print_params=True)
 
         # Optimizer
         self.scaler = torch.cuda.amp.GradScaler(enabled=(self.args.dtype == 'float16'))
@@ -668,10 +677,22 @@ class Trainer:
             writer.writerow(args)
 
 
-    def log_gamma_beta(self, gamma, beta, iter_num, layer_num):
+    def log_gamma_beta(self, gamma, beta, iter_num, layer_num, head_num=None):
         if self.args.tensorboard_log:
-            self.writer.add_scalar( "gamma_" + str(layer_num), gamma, iter_num)
-            self.writer.add_scalar( "beta_" + str(layer_num), beta, iter_num)
+            if head_num:
+                self.writer.add_scalars(
+                        "gammas",
+                        {"gamma_L" + str(layer_num) + "_H" + head_num: gamma},
+                        iter_num
+                        )
+                self.writer.add_scalars(
+                        "betas",
+                        {"beta_L" + str(layer_num) + "_H" + head_num: beta},
+                        iter_num
+                        )
+            else:
+                self.writer.add_scalar( "gamma_L" + str(layer_num), gamma, iter_num)
+                self.writer.add_scalar( "beta_L" + str(layer_num), beta, iter_num)
 
         if self.args.wandb_log and self.master_process:
             import wandb
@@ -737,6 +758,7 @@ class Trainer:
                             'config': vars(self.args),
                         }
                         torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
+
                     if losses['val'] < self.best_val_loss or self.args.always_save_checkpoint:
                         if losses['val'] < self.best_val_loss:
                             self.iter_num_best_val_loss = self.iter_num
