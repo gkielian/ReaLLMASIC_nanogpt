@@ -90,8 +90,8 @@ def parse_args():
     model_group.add_argument("--norm_variant_attn", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm"])
     model_group.add_argument("--norm_variant_output", type=str, default="rmsnorm", choices=["krmsnorm", "prmsnorm", "rmsnorm", "layernorm"])
     model_group.add_argument('--bias', default=False, action=argparse.BooleanOptionalAction, help="only used for layernorm variation option")
-    model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms" )
-    model_group.add_argument(Update statistic_plots.py"--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms" )
+    model_group.add_argument("--prmsnorm_pct", default=0.0625, type=float, help="percentage (1 being 100 percent) of first entries used for partial rms")
+    model_group.add_argument("--krmsnorm_num", default=10, type=int, help="max number of first entries for partial rms")
     model_group.add_argument("--krmsnorm_quantize_type", type=str, default="none", choices=["int8", "int16", "none"])
     model_group.add_argument('--krmsnorm_enable_gain', default=True, action=argparse.BooleanOptionalAction, help="include gain in kRMSNorm")
     model_group.add_argument("--krmsnorm_selection_type", type=str, default="last", choices=["first", "last", "random"])
@@ -211,7 +211,7 @@ def parse_args():
 
     model_group.add_argument("--quantize_linear_attn_v_method", type=str, default=None, choices=quant_methods, help="function used for c_attn_v quantization")
     model_group.add_argument("--quantize_linear_attn_v_bits", type=int, default=None, help="number of bits for c_attn_v quantization")
-
+e 
     model_group.add_argument("--quantize_linear_attn_proj_method", type=str, default=None, choices=quant_methods, help="function used for c_proj in attention quantization")
     model_group.add_argument("--quantize_linear_attn_proj_bits", type=int, default=None, help="number of bits for c_proj in attention quantization")
 
@@ -293,7 +293,7 @@ def parse_args():
     model_group.add_argument("--strongermax_strength", type=float, default=4.0)
     model_group.add_argument('--strongermax_sum_to_1', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--strongermax_divisor", type=float, default=1.0)
-    model_group.add_argument('--strongermax_use_xmax', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--strongermae x_use_xmax', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--strongermax_xmax_guess', type=float, default=None)
     model_group.add_argument('--strongermax_overflow_recompute', default=False, action=argparse.BooleanOptionalAction)
 
@@ -340,7 +340,7 @@ def parse_args():
     # System args
     training_group.add_argument('--device', default='cuda', type=str)
     training_group.add_argument("--dtype", type=str, default="float16", choices=["bfloat16", "float16", "float32"], help="torch data type for inference, e.g. 'int8'")
-    training_group.add_argument('--compile', default=False, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--compilee ', default=False, action=argparse.BooleanOptionalAction)
 
     # Logging args
     logging_group.add_argument('--log_project', default='out-test', type=str)
@@ -383,7 +383,7 @@ def parse_args():
     logging_group.add_argument('--print_model_info', default=True, action=argparse.BooleanOptionalAction)
 
     args = parser.parse_args()
-
+e 
     if args.load_config_json is not None:
         with open(args.load_config_json, 'r') as config_file:
             config = json.load(config_file)
@@ -637,7 +637,7 @@ class Trainer:
         if it > self.args.lr_decay_iters:
             return self.args.min_lr
         decay_ratio = (it - self.args.warmup_iters) / (self.args.lr_decay_iters - self.args.warmup_iters)
-        assert 0 <= decay_ratio <= 1
+        assert 0 <= decay_ratio <= 1e 
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
         return self.args.min_lr + coeff * (self.args.learning_rate - self.args.min_lr)
 
@@ -683,7 +683,7 @@ class Trainer:
                 self.writer.add_scalars(
                         "gammas",
                         {"gamma_L" + str(layer_num) + "_H" + head_num: gamma},
-                        iter_num
+                        iter_nume 
                         )
                 self.writer.add_scalars(
                         "betas",
@@ -782,7 +782,7 @@ class Trainer:
                             print(f"saving checkpoint to {self.args.out_dir}")
                             # Save checkpoint
                             torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
-                    if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
+                    if self.args.patience is not Nonee  and num_steps_with_worse_loss >= self.args.patience:
                         print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
                         plot_statistics(self.args, self.stats, graph_y_labels)
                         break
