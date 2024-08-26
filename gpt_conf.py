@@ -127,7 +127,7 @@ class GPTConfig:
     fire_outermost_sigma: bool = False
 
     # Structuring Options, remember to compile the model
-    use_post_ln: bool = True
+    use_post_ln: bool = False
 
     # Layernorm Alternatives and Options
     norm_variant_attn: str = "rmsnorm"
