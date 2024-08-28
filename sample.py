@@ -210,6 +210,7 @@ def main():
     if args.start.startswith('FILE:'):
         with open(args.start[5:], 'r', encoding='utf-8') as f:
             args.start = f.read()
+
     start_ids = encode(args.start)
 
     if args.interactive:

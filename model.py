@@ -109,7 +109,6 @@ class CausalSelfAttention(nn.Module):
             config.n_kv_group = config.n_head
         else:
             assert config.n_embd % config.n_kv_group == 0
-        
 
         self.quantization_attn_dict = {}
         self.quantization_attn_dict["activations_quant_method"] = config.activations_quant_method
@@ -126,7 +125,7 @@ class CausalSelfAttention(nn.Module):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_bits)
             elif arg.startswith("quantize_") and "linear_attn" in arg and arg.endswith("_method"):
                 self.quantization_attn_dict[arg] = set_variant(val, config.quantize_linear_method)
-        
+
         self.linear_variant_q = linear_dictionary[set_variant(config.linear_variant_q, config.linear_variant_attn)]
         self.linear_variant_k = linear_dictionary[set_variant(config.linear_variant_k, config.linear_variant_attn)]
         self.linear_variant_v = linear_dictionary[set_variant(config.linear_variant_v, config.linear_variant_attn)]
@@ -147,14 +146,21 @@ class CausalSelfAttention(nn.Module):
         self.c_attn_v = self.linear_variant_v(config.n_embd, self.kv_dim, config, self.quantization_attn_dict["quantize_linear_attn_v_method"], self.quantization_attn_dict["quantize_linear_attn_v_bits"], bias=config.bias)
         self.c_proj = self.linear_variant_attn_proj(config.n_embd, config.n_embd, config, self.quantization_attn_dict["quantize_linear_attn_proj_method"], self.quantization_attn_dict["quantize_linear_attn_proj_bits"], bias=config.bias)
 
-        # regularization
+        # Regularization
         self.attn_dropout = nn.Dropout(config.dropout)
         self.resid_dropout = nn.Dropout(config.dropout)
-        self.n_embd = config.n_embd
         self.dropout = config.dropout
-        self.window_size = config.window_size
+
+        # Embedding
         self.n_embd = config.n_embd
+
+        # Sliding window size
+        self.window_size = config.window_size
+
+        # Gating
         self.gate = config.gate
+
+        # Fire Embeddings
         self.use_fire_embeddings = None
         if config.use_fire_embeddings:
             self.use_fire_embeddings = config.use_fire_embeddings
@@ -343,7 +349,7 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, config):
         super().__init__()
-       
+
         # Select "mlp variant"
         self.mlp_variant = config.mlp_variant
 
@@ -357,10 +363,10 @@ class MLP(nn.Module):
             # Sets the class of linear for MLP
             self.linear_variant_mlp_up = linear_dictionary[set_variant(config.linear_variant_mlp_up, config.linear_variant_mlp)]
             self.linear_variant_mlp_down = linear_dictionary[set_variant(config.linear_variant_mlp_down, config.linear_variant_mlp)]
-            
+
             self.quantization_mlp_dict = {}
             self.quantization_mlp_dict["activations_quant_method"] = config.activations_quant_method
-        
+
             # Set quantization parameters for MLP
             for arg, val in vars(config).items():
                 # Set MLP Activation precision and quantization method
@@ -375,7 +381,7 @@ class MLP(nn.Module):
                     self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_bits)
                 elif arg.startswith("quantize_") and "linear_mlp" in arg and arg.endswith("_method"):
                     self.quantization_mlp_dict[arg] = set_variant(val, config.quantize_linear_method)
-            
+
             # Instantiate Linear Layers
             if self.mlp_variant == "mlp":
                 self.c_fc = self.linear_variant_mlp_up(config.n_embd, 4 * config.n_embd, config, self.quantization_mlp_dict["quantize_linear_mlp_up_method"], self.quantization_mlp_dict["quantize_linear_mlp_up_bits"], bias=config.bias)
@@ -395,7 +401,7 @@ class MLP(nn.Module):
 
         if self.mlp_variant == "kan":
             x = self.kan(x)
-        
+
         elif self.mlp_variant == "mlp":
             x = self.c_fc(x)
 
@@ -412,7 +418,7 @@ class MLP(nn.Module):
                 x = fake_quantize_act(self, "mlp_act_activation_output", x, num_bits, quant_method)
 
             x = self.c_proj(x)
-         
+
         elif self.mlp_variant == "swiglu":
             x_in1 = self.c_fc_in1(x)
 
@@ -433,7 +439,7 @@ class MLP(nn.Module):
             x = self.c_fc_out(x_out)
 
         x = self.dropout(x)
-        
+
         if self.quantization_mlp_dict["quantize_mlp_act_output"]:
             num_bits = self.quantization_mlp_dict["quantize_mlp_act_output_bits"]
             quant_method = self.quantization_mlp_dict["activations_quant_method"]
@@ -503,10 +509,24 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
+        self.n_embd_wte = config.n_embd_wte
+
         if config.quantize_wte:
-            word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantize_wte_method, config.quantize_wte_bits)
+            print("quantized")
+            if config.n_embd_wte:
+                # If factorization is set
+                word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd_wte, config.quantize_wte_method, config.quantize_wte_bits)
+            else:
+                # no factorization
+                word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantize_wte_method, config.quantize_wte_bits)
         else:
-            word_embd = nn.Embedding(config.vocab_size, config.n_embd)
+            print("non quantized")
+            if config.n_embd_wte:
+                # If factorization is set
+                word_embd = nn.Embedding(config.vocab_size, config.n_embd_wte)
+            else:
+                # no factorization
+                word_embd = nn.Embedding(config.vocab_size, config.n_embd)
 
         self.transformer = nn.ModuleDict(dict(
             wte = word_embd,
@@ -527,17 +547,28 @@ class GPT(nn.Module):
         if self.softmax_variant_output != "softmax":
             self.softmax_layer_output = softmax_dictionary[config.softmax_variant_output](config)
 
-        self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
+        if config.n_embd_wte:
+            self.lm_head = nn.Linear(config.n_embd_wte, config.vocab_size, bias=False)
+        else:
+            self.lm_head = nn.Linear(config.n_embd, config.vocab_size, bias=False)
         # with weight tying when using torch.compile() some warnings get generated:
         # "UserWarning: functional_call was passed multiple values for tied weights.
         # This behavior is deprecated and will be an error in future versions"
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
+        ## If factorization is set create and apply init
+        if self.n_embd_wte:
+            # TODO: make this linear set from variant dictionary
+            # TODO: make this linear quantizable
+            self.transformer['scale_up'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
+            self.transformer['scale_down'] = nn.Linear(config.n_embd, config.n_embd_wte, bias=False)
+            # self.transformer.scale_up.weight = nn.Parameter(self.transformer.scale_down.weight.T) # Weight tying
+
         # init all weights
         self.apply(self._init_weights)
-        # apply special scaled init to the residual projections, per GPT-2 paper
         for pn, p in self.named_parameters():
+            # apply special scaled init to the residual projections, per GPT-2 paper
             if pn.endswith('c_proj.weight'):
                 torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
 
@@ -602,6 +633,8 @@ class GPT(nn.Module):
         # forward the GPT model itself
         tok_emb = self.transformer.wte(idx) # token embeddings of shape (b, t, n_embd)
         x = None
+        if self.n_embd_wte:
+            tok_emb = self.transformer.scale_up(tok_emb)
         if self.config.use_abs_pos_embeddings:
           pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
           pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
@@ -613,11 +646,14 @@ class GPT(nn.Module):
 
         for block in self.transformer.h:
             if self.config.use_gradient_checkpointing:
-                x = checkpoint.checkpoint(block, x, use_reentrant=self.recompute_backward_pass)
+                x = checkpoint.checkpoint(block, x, use_reentrant=self.config.recompute_backward_pass)
             else:
                 x = block(x)
 
         x = self.transformer.ln_f(x)
+
+        if self.n_embd_wte:
+            x = self.transformer.scale_down(x)
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
@@ -646,9 +682,9 @@ class GPT(nn.Module):
     def from_pretrained(cls, config, model_type):
         # assert model_type in {'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl'}
         from transformers import GPT2LMHeadModel
-        
+
         print(f"loading weights from pretrained gpt: {model_type}")
-        
+
         # create a from-scratch initialized minGPT model
         model = GPT(config)
         model_hf = GPT2LMHeadModel.from_pretrained(model_type)
