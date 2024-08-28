@@ -52,6 +52,7 @@ def parse_args():
     training_group.add_argument('--max_sample_tokens', default=None, type=int, help="If set, maximum number of tokens to sample and print after each validation loss")
     training_group.add_argument('--sample_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Produce sample even if the validation loss did not improve. Allows for testing what overtraining looks like.")
     training_group.add_argument('--sample_start_tokens', default='\n', type=str)
+    training_group.add_argument('--sample_only', default=False, action=argparse.BooleanOptionalAction, help="Run only the sampling process and exit")
 
     # Checkpoint args
     training_group.add_argument('--only_save_checkpoint_at_end', default=False, action=argparse.BooleanOptionalAction)
@@ -435,7 +436,12 @@ class Trainer:
             self.args.lr_decay_iters = self.args.max_iters
 
         self.setup()
-        self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
+
+        if self.args.sample_only:
+            self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
+
+        if self.args.create_statistics:
+            self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
 
     def setup(self):
         # Setup DDP
@@ -951,7 +957,9 @@ class Trainer:
 def main():
     args, model_group, training_group, logging_group = parse_args()
     trainer = Trainer(args, model_group, training_group, logging_group)
-    trainer.train()
+
+    if not args.sample_only:
+        trainer.train()
 
     if trainer.ddp:
         destroy_process_group()
