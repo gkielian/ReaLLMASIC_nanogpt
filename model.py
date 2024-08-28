@@ -562,8 +562,8 @@ class GPT(nn.Module):
             # TODO: make this linear set from variant dictionary
             # TODO: make this linear quantizable
             self.transformer['scale_up'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
-            self.transformer['scale_down'] = nn.Linear(config.n_embd, config.n_embd_wte, bias=False)
-            # self.transformer.scale_up.weight = nn.Parameter(self.transformer.scale_down.weight.T) # Weight tying
+            self.transformer['scale_down'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
+            self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
 
         # init all weights
         self.apply(self._init_weights)
@@ -653,7 +653,7 @@ class GPT(nn.Module):
         x = self.transformer.ln_f(x)
 
         if self.n_embd_wte:
-            x = self.transformer.scale_down(x)
+            x = F.linear(x, self.transformer.scale_down.weight.t())
 
         if targets is not None:
             # if we are given some desired targets also calculate the loss
