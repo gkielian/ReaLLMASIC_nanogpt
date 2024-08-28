@@ -10,6 +10,7 @@ class GPTConfig:
     n_kv_group: int = 12
     n_embd: int = 768
     n_embd_wte: int = None
+    n_embd_wte_scale_weight_tying: bool = False
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False

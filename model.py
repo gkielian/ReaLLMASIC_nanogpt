@@ -11,6 +11,7 @@ import math
 import inspect
 import sys
 import re
+from rich import print
 
 import torch
 import torch.nn as nn
@@ -509,7 +510,9 @@ class GPT(nn.Module):
         # Shared Parameters Attention
         shared_attn_array = create_shared_param_group("attn", config)
 
+        # Factorization Parameters
         self.n_embd_wte = config.n_embd_wte
+        self.n_embd_wte_scale_weight_tying = config.n_embd_wte_scale_weight_tying
 
         if config.quantize_wte:
             print("quantized")
@@ -563,7 +566,12 @@ class GPT(nn.Module):
             # TODO: make this linear quantizable
             self.transformer['scale_up'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
             self.transformer['scale_down'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
-            self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
+            if self.n_embd_wte_scale_weight_tying:
+                self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
+                print("Using scaling matrix weight tying")
+            else:
+                print("Not using scaling matrix weight tying")
+
 
         # init all weights
         self.apply(self._init_weights)
