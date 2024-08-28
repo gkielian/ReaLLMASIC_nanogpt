@@ -613,7 +613,7 @@ class GPT(nn.Module):
 
         for block in self.transformer.h:
             if self.config.use_gradient_checkpointing:
-                x = checkpoint.checkpoint(block, x, use_reentrant=False)
+                x = checkpoint.checkpoint(block, x, use_reentrant=self.recompute_backward_pass)
             else:
                 x = block(x)
 

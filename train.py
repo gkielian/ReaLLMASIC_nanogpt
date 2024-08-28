@@ -338,6 +338,7 @@ def parse_args():
 
     # Gradient Checkpointing
     training_group.add_argument('--use_gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency. For best memory tradeoff omit the --compile flag. For medium memory tradeoff add --compile.")
+    training_group.add_argument('--recompute_backward_pass', default=False, action=argparse.BooleanOptionalAction, help="Recomputes for the backward pass, must use with --use_gradient_checkpointing")
 
     # Optimizer args
     training_group.add_argument('--max_iters', default=3500, type=int)
