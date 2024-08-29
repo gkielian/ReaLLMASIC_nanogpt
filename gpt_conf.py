@@ -9,8 +9,15 @@ class GPTConfig:
     n_head: int = 12
     n_kv_group: int = 12
     n_embd: int = 768
+
+    # If Factorizing:
     n_embd_wte: int = None
     n_embd_wte_scale_weight_tying: bool = False
+    import_wte_freeze: bool = False
+    import_wte_npy: str = None
+    export_wte_npy: str = None
+    export_wte_each_eval: bool = False
+
     dropout: float = 0.0
     window_size: int = 128
     gate: bool = False

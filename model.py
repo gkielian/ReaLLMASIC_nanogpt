@@ -13,6 +13,8 @@ import sys
 import re
 from rich import print
 
+import numpy as np
+
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
@@ -515,7 +517,6 @@ class GPT(nn.Module):
         self.n_embd_wte_scale_weight_tying = config.n_embd_wte_scale_weight_tying
 
         if config.quantize_wte:
-            print("quantized")
             if config.n_embd_wte:
                 # If factorization is set
                 word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd_wte, config.quantize_wte_method, config.quantize_wte_bits)
@@ -523,7 +524,6 @@ class GPT(nn.Module):
                 # no factorization
                 word_embd = QuantizedEmbedding(config.vocab_size, config.n_embd, config.quantize_wte_method, config.quantize_wte_bits)
         else:
-            print("non quantized")
             if config.n_embd_wte:
                 # If factorization is set
                 word_embd = nn.Embedding(config.vocab_size, config.n_embd_wte)
@@ -568,13 +568,14 @@ class GPT(nn.Module):
             self.transformer['scale_down'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
             if self.n_embd_wte_scale_weight_tying:
                 self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
-                print("Using scaling matrix weight tying")
-            else:
-                print("Not using scaling matrix weight tying")
-
 
         # init all weights
         self.apply(self._init_weights)
+
+        if self.config.import_wte_npy:
+            # Replace wte with values from numpy and retie weights
+            self.import_wte(self.config.import_wte_npy)
+
         for pn, p in self.named_parameters():
             # apply special scaled init to the residual projections, per GPT-2 paper
             if pn.endswith('c_proj.weight'):
@@ -632,6 +633,28 @@ class GPT(nn.Module):
                 block.attn.rotary_emb_q.update_rope_length(rope_length)
                 block.attn.rotary_emb_k.update_rope_length(rope_length)
 
+    def import_wte(self, file_path):
+        """ Replace wte with values from numpy and retie weights """
+
+        #Load and format weights
+        initial_embeddings = np.load(self.config.import_wte_npy)
+        initial_embeddings_tensor = torch.from_numpy(initial_embeddings).float()
+
+        # Initialize imported wte
+        self.transformer.wte = nn.Embedding.from_pretrained(
+                initial_embeddings_tensor,
+                freeze=self.config.import_wte_freeze
+                )
+
+        # Redo the Weight tying
+        self.lm_head.weight = self.transformer.wte.weight
+
+    def export_wte(self, file_path):
+        # TODO: Determine strategy with this and other means of export, possibly
+        # replacing this with composition of existing means
+        embedding_table = self.transformer.wte.weight.detach().cpu().numpy()
+        np.save(file_path, embedding_table)
+        print(f"Embedding table saved to {file_path}")
 
     def forward(self, idx, targets=None):
         device = idx.device

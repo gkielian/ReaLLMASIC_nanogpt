@@ -41,6 +41,12 @@ def parse_args():
     training_group = parser.add_argument_group('training_group')
     logging_group = parser.add_argument_group('logging_group')
 
+    # Export Args
+    model_group.add_argument('--import_wte_npy', default=None, type=str, help='Path to import the embedding table as a .npy file')
+    model_group.add_argument('--export_wte_npy', default=None, type=str, help='Path to export the embedding table as a .npy file')
+    model_group.add_argument('--export_wte_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Requires --export_wte is not None. If this is so, will always export embedding to numpy after evaluation")
+    model_group.add_argument('--import_wte_freeze', default=False, action=argparse.BooleanOptionalAction, help="Whether to freeze an imported wte")
+
     # I/O args
     training_group.add_argument('--out_dir', default='out', type=str)
     training_group.add_argument('--eval_interval', default=250, type=int)
@@ -340,8 +346,8 @@ def parse_args():
     model_group.add_argument('--div_by_seq_len', default=False, action=argparse.BooleanOptionalAction)
 
     # Gradient Checkpointing
-    training_group.add_argument('--use_gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency. For best memory tradeoff omit the --compile flag. For medium memory tradeoff add --compile.")
-    training_group.add_argument('--recompute_backward_pass', default=False, action=argparse.BooleanOptionalAction, help="Recomputes for the backward pass, must use with --use_gradient_checkpointing")
+    model_group.add_argument('--use_gradient_checkpointing', default=False, action=argparse.BooleanOptionalAction, help="Memory efficient training, but takes longer time to train due to trading compute time for memory efficiency. For best memory tradeoff omit the --compile flag. For medium memory tradeoff add --compile.")
+    model_group.add_argument('--recompute_backward_pass', default=False, action=argparse.BooleanOptionalAction, help="Recomputes for the backward pass, must use with --use_gradient_checkpointing")
 
     # Optimizer args
     training_group.add_argument('--max_iters', default=3500, type=int)
@@ -851,10 +857,18 @@ class Trainer:
                         # Try new checkpoint if better val loss
                         if self.args.max_sample_tokens:
                             self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
-                    elif self.args.sample_each_eval:
-                        # Try model inference (e.g. exploring inference from overfitting)
-                        if self.args.max_sample_tokens:
-                            self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
+                        # export embedding table to npy file
+                        if self.args.export_wte_npy:
+                            self.raw_model.export_wte(self.args.export_wte_npy)
+                    else:
+                        if self.args.sample_each_eval:
+                            # Try model inference (e.g. exploring inference from overfitting)
+                            if self.args.max_sample_tokens:
+                                self.sample_and_print(self.args.max_sample_tokens, start_tokens=self.args.sample_start_tokens)
+                        if self.args.export_wte_each_eval:
+                            # export wte table to npy file
+                            if self.args.export_wte_npy:
+                                self.raw_model.export_wte(self.args.export_wte_npy)
 
                     if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                         print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")
