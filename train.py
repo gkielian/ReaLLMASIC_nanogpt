@@ -489,7 +489,6 @@ class Trainer:
         # TODO only add if they are defined from the argparse
         self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
         self.model_args['vocab_size'] = None
-        self.model_args['use_gradient_checkpointing'] = self.args.use_gradient_checkpointing
 
         # Training settings
         self.training_args = {action.dest: getattr(self.args, action.dest) for action in self.training_group._group_actions}
