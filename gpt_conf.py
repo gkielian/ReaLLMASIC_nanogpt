@@ -13,10 +13,18 @@ class GPTConfig:
     # If Factorizing:
     n_embd_wte: int = None
     n_embd_wte_scale_weight_tying: bool = False
+
+    # wte import/export
     import_wte_freeze: bool = False
     import_wte_npy: str = None
     export_wte_npy: str = None
     export_wte_each_eval: bool = False
+
+    # scaling matrices import/export
+    import_scale_matrices_freeze: bool = False
+    import_scale_matrices_npz: str = None
+    export_scale_matrices_npz: str = None
+    export_scale_matrices_each_eval: bool = False
 
     dropout: float = 0.0
     window_size: int = 128

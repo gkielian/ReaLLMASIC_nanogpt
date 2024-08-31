@@ -42,10 +42,17 @@ def parse_args():
     logging_group = parser.add_argument_group('logging_group')
 
     # Export Args
+    ## Factored WTE
     model_group.add_argument('--import_wte_npy', default=None, type=str, help='Path to import the embedding table as a .npy file')
     model_group.add_argument('--export_wte_npy', default=None, type=str, help='Path to export the embedding table as a .npy file')
     model_group.add_argument('--export_wte_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Requires --export_wte is not None. If this is so, will always export embedding to numpy after evaluation")
     model_group.add_argument('--import_wte_freeze', default=False, action=argparse.BooleanOptionalAction, help="Whether to freeze an imported wte")
+
+    ## Factored Scale Matrices
+    model_group.add_argument('--import_scale_matrices_npz', default=None, type=str, help='Path to import the scale matrices as a .npz file')
+    model_group.add_argument('--export_scale_matrices_npz', default=None, type=str, help='Path to export the scale matrices as a .npz file')
+    model_group.add_argument('--export_scale_matrices_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Requires --export_scale_matrices_npz is not None. If this is so, will always export to npz after evaluation")
+    model_group.add_argument('--import_scale_matrices_freeze', default=False, action=argparse.BooleanOptionalAction, help="Whether to freeze scaled_matrices")
 
     # I/O args
     training_group.add_argument('--out_dir', default='out', type=str)
@@ -859,6 +866,9 @@ class Trainer:
                         # export embedding table to npy file
                         if self.args.export_wte_npy:
                             self.raw_model.export_wte(self.args.export_wte_npy)
+                        # export scale matrices to npz file
+                        if self.args.export_scale_matrices_npz:
+                            self.raw_model.export_scale_matrices(self.args.export_scale_matrices_npz)
                     else:
                         if self.args.sample_each_eval:
                             # Try model inference (e.g. exploring inference from overfitting)
@@ -868,6 +878,10 @@ class Trainer:
                             # export wte table to npy file
                             if self.args.export_wte_npy:
                                 self.raw_model.export_wte(self.args.export_wte_npy)
+                        if self.args.export_scale_matrices_each_eval:
+                            # export scale matrices to npz file
+                            if self.args.export_scale_matrices_npz:
+                                self.raw_model.export_scale_matrices(self.args.export_scale_matrices_npz)
 
                     if self.args.patience is not None and num_steps_with_worse_loss >= self.args.patience:
                         print(f"Early Stopping: loss has not decreased in {self.args.patience + 1} steps")

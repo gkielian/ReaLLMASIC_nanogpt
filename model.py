@@ -560,21 +560,31 @@ class GPT(nn.Module):
         # not 100% sure what this is, so far seems to be harmless. TODO investigate
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
-        ## If factorization is set create and apply init
+        # Initialize and possibly import scale_up and scale_down matrices, if factorization is set
         if self.n_embd_wte:
             # TODO: make this linear set from variant dictionary
             # TODO: make this linear quantizable
             self.transformer['scale_up'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
             self.transformer['scale_down'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
+
             if self.n_embd_wte_scale_weight_tying:
                 self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
+
+            if config.wte_freeze_scale_matrices:
+                self.transformer.scale_up.weight.requires_grad = False
+                self.transformer.scale_down.weight.requires_grad = False
 
         # init all weights
         self.apply(self._init_weights)
 
+        # import wte
         if self.config.import_wte_npy:
             # Replace wte with values from numpy and retie weights
             self.import_wte(self.config.import_wte_npy)
+
+        # import scale_matrices
+        if config.import_scale_matrices:
+            self.import_scale_matrices(config.import_scale_matrices, config.scale_matrix_weight_tying)
 
         for pn, p in self.named_parameters():
             # apply special scaled init to the residual projections, per GPT-2 paper
@@ -655,6 +665,28 @@ class GPT(nn.Module):
         embedding_table = self.transformer.wte.weight.detach().cpu().numpy()
         np.save(file_path, embedding_table)
         print(f"Embedding table saved to {file_path}")
+
+    def import_scale_matrices(self, file_path, weight_tying=False):
+        """Import scale_up and scale_down matrices from a numpy file."""
+        scale_matrices = np.load(file_path)
+        scale_up_tensor = torch.from_numpy(scale_matrices['scale_up']).float()
+        scale_down_tensor = torch.from_numpy(scale_matrices['scale_down']).float()
+
+        self.transformer.scale_up.weight.data.copy_(scale_up_tensor)
+        self.transformer.scale_down.weight.data.copy_(scale_down_tensor)
+
+        if weight_tying:
+            self.transformer.scale_up.weight = self.transformer.scale_down.weight
+
+        print(f"Scale matrices loaded from {file_path} with weight tying: {weight_tying}")
+
+    def export_scale_matrices(self, file_path):
+        """Export scale_up and scale_down matrices to a numpy file."""
+        scale_up_matrix = self.transformer.scale_up.weight.detach().cpu().numpy()
+        scale_down_matrix = self.transformer.scale_down.weight.detach().cpu().numpy()
+
+        np.savez(file_path, scale_up=scale_up_matrix, scale_down=scale_down_matrix)
+        print(f"Scale matrices saved to {file_path}")
 
     def forward(self, idx, targets=None):
         device = idx.device
