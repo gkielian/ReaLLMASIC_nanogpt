@@ -707,11 +707,21 @@ class GPT(nn.Module):
 
         x.requires_grad_(True)  # Ensure requires_grad is True
 
+        layer = 1
         for block in self.transformer.h:
+            # Propagate tokens through layers
             if self.config.use_gradient_checkpointing:
                 x = checkpoint.checkpoint(block, x, use_reentrant=self.config.recompute_backward_pass)
             else:
                 x = block(x)
+
+            # Intercept for Steering Vectors
+            if self.config.apply_vector_at_layer_idx is not None and layer == self.config.apply_vector_at_layer_idx:
+                x = self.apply_vector_to_layer_output(x)
+            if self.config.obtain_vector_at_layer_idx is not None and layer == self.config.obtain_vector_at_layer_idx:
+                x = self.obtain_vector_from_layer_output(x)
+
+            layer +=1
 
         x = self.transformer.ln_f(x)
 
@@ -728,6 +738,34 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+
+    def apply_vector_to_layer_output(self, x):
+        """Conditionally add a vector from a file to the output of a specific layer."""
+
+        # require this method has the vector file
+        assert self.config.apply_vector_file is not None
+
+        vector = np.load(self.config.apply_vector_file)
+        vector_tensor = torch.from_numpy(vector).float().to(x.device)
+        x = x + self.config.scale_factor * vector_tensor
+
+        return x
+
+    def obtain_vector_from_layer_output(self, x):
+        """Append a vector to an existing .npy file."""
+
+        # Convert the tensor back to a numpy array
+        result_vector = x.detach().cpu().numpy()
+
+        # Load the existing .npy file
+        existing_vectors = np.load(self.config.obtain_vector_file)
+
+        # Stack the existing vectors with the new result vector along a new axis
+        updated_vectors = np.vstack([existing_vectors, result_vector])
+
+        # Save the updated vectors back to the file
+        np.save(self.config.obtain_vector_file, updated_vectors)
+        print(f"Updated vectors saved to {self.config.obtain_vector_file}")
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
@@ -941,6 +979,4 @@ class MoELayer(nn.Module):
                 final_output[expert_mask] += weighted_output.squeeze(1)
         # print(f"final_output.shape = {final_output.shape}\n")
         return final_output
-
-
 

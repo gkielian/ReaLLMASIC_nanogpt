@@ -99,6 +99,16 @@ def parse_args():
     model_group.add_argument('--moe_top_k', default=2, type=int)
     model_group.add_argument('--moe_router_scheme', default="softmax", type=str, help="option to set routing scheme for MoE layer, defaults to softmax")
 
+    ## Steering Vector Opts
+    ### options for application of steering vectors
+    model_group.add_argument('--apply_vector_at_layer_idx', default=None, type=int)
+    model_group.add_argument("--apply_vector_file", type=str, default=None, help="single vector to apply with scaling factor")
+    model_group.add_argument("--apply_vector_scaling_factor", type=float, default=1.0, help="scaling factor to apply to steering vector")
+
+    ### options for intercepting vectors
+    model_group.add_argument('--obtain_vector_at_layer_idx', default=None, type=int)
+    model_group.add_argument("--obtain_vector_file", type=str, default=None, help="initial KAN activation")
+
     ## MLP Options
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--mlp_variant", type=str, default="mlp", choices=["mlp", "kan", "swiglu"], help="MLP variation type")

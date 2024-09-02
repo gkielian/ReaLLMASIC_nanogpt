@@ -10,6 +10,15 @@ class GPTConfig:
     n_kv_group: int = 12
     n_embd: int = 768
 
+    # Steering Vectors
+    ## Where to intercept
+    apply_vector_at_layer_idx: int = None
+    obtain_vector_at_layer_idx: int = None
+
+    ## Files to insert or obtain vectors from
+    apply_vector_file: str = None
+    obtain_vector_file: str = None
+
     # If Factorizing:
     n_embd_wte: int = None
     n_embd_wte_scale_weight_tying: bool = False
