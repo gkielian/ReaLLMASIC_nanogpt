@@ -13,6 +13,13 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, BarColumn, TextColumn
 
+# Learning rate decay functions
+def cosine_decay_lr(epoch, total_epochs, lr_start, lr_stop):
+    return lr_stop + 0.5 * (lr_start - lr_stop) * (1 + np.cos(np.pi * epoch / total_epochs))
+
+def linear_decay_lr(epoch, total_epochs, lr_start, lr_stop):
+    return lr_start - (lr_start - lr_stop) * (epoch / total_epochs)
+
 # Custom loss function for direction and magnitude alignment
 def direction_magnitude_loss(reconstructed_matrix, original_matrix):
     cosine_loss = 1 - F.cosine_similarity(reconstructed_matrix, original_matrix, dim=1).mean()
@@ -20,7 +27,7 @@ def direction_magnitude_loss(reconstructed_matrix, original_matrix):
     return cosine_loss + norm_loss
 
 # Factorization function with configurable A, seed, and loss function
-def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id, output_dir=None, loss_fn='mse'):
+def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id, lr_start, lr_stop, lr_decay, output_dir=None, loss_fn='mse'):
     A = int(A)  # Ensure A is an integer
     torch.manual_seed(seed)
     n_rows, n_cols = original_matrix.shape
@@ -28,7 +35,7 @@ def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, tas
     W1 = torch.randn((n_rows, A), requires_grad=True, device=device)
     W2 = torch.randn((A, n_cols), requires_grad=True, device=device)
 
-    optimizer = optim.Adam([W1, W2], lr=1e-3)
+    optimizer = optim.Adam([W1, W2], lr=lr_start)
 
     # Choose the loss function
     if loss_fn == 'mse':
@@ -47,6 +54,16 @@ def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, tas
     best_W1, best_W2, best_loss = None, None, float('inf')
 
     for epoch in range(num_epochs):
+        if lr_decay == 'cosine':
+            lr = cosine_decay_lr(epoch, num_epochs, lr_start, lr_stop)
+        elif lr_decay == 'linear':
+            lr = linear_decay_lr(epoch, num_epochs, lr_start, lr_stop)
+        else:
+            lr = lr_start  # No decay
+
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr
+
         optimizer.zero_grad()
         reconstructed_matrix = torch.matmul(W1, W2)
         loss = loss_fn_obj(reconstructed_matrix, original_matrix)
@@ -69,7 +86,7 @@ def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, tas
 
     return best_loss, best_W1, best_W2
 
-def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_step, A_end, num_epochs, num_seeds, original_matrix, device, output_csv, output_dir, loss_fn):
+def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_step, A_end, num_epochs, num_seeds, original_matrix, device, output_csv, output_dir, loss_fn, lr_start, lr_stop, lr_decay):
     search_space = vz.SearchSpace()
     feasible_values_list = []
     if A_step == 1:
@@ -119,7 +136,7 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
                     refresh_per_second=1,
                 ) as progress:
                     task_id = progress.add_task(f"Training (Seed {seed+1})", total=num_epochs)
-                    loss, W1, W2 = factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id, output_dir, loss_fn)
+                    loss, W1, W2 = factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id, lr_start, lr_stop, lr_decay, output_dir, loss_fn)
                 seed_losses.append(loss)
 
                 if loss < best_seed_loss:
@@ -215,9 +232,13 @@ def main():
     parser.add_argument('--output_dir', type=str, default="out", help="Directory to save output factorization results.")
     parser.add_argument('--matrix_path', type=str, default=None, help="Path to the matrix .npy file for factorization.")
     parser.add_argument('--loss_fn', type=str, choices=['mse', 'mae', 'huber', 'cosine', 'frobenius', 'direction_magnitude'], default='direction_magnitude', help="Loss function to use for matrix approximation.")
+    parser.add_argument('--lr_start', type=float, default=1e-3, help="Initial learning rate.")
+    parser.add_argument('--lr_stop', type=float, default=1e-5, help="Final learning rate for decay.")
+    parser.add_argument('--lr_decay', type=str, choices=['none', 'cosine', 'linear'], default='cosine', help="Learning rate decay method.")
+
     args = parser.parse_args()
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     if args.matrix_path:
         original_matrix = torch.from_numpy(np.load(args.matrix_path)).to(device)
@@ -236,7 +257,10 @@ def main():
         device,
         args.output_csv,
         args.output_dir,
-        args.loss_fn
+        args.loss_fn,
+        args.lr_start,
+        args.lr_stop,
+        args.lr_decay
     )
 
 if __name__ == "__main__":
