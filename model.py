@@ -570,7 +570,7 @@ class GPT(nn.Module):
             if self.n_embd_wte_scale_weight_tying:
                 self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
 
-            if config.wte_freeze_scale_matrices:
+            if config.import_scale_matrices_freeze:
                 self.transformer.scale_up.weight.requires_grad = False
                 self.transformer.scale_down.weight.requires_grad = False
 
@@ -583,8 +583,8 @@ class GPT(nn.Module):
             self.import_wte(self.config.import_wte_npy)
 
         # import scale_matrices
-        if config.import_scale_matrices:
-            self.import_scale_matrices(config.import_scale_matrices, config.scale_matrix_weight_tying)
+        if config.import_scale_matrices_npz:
+            self.import_scale_matrices(config.import_scale_matrices_npz, config.scale_matrix_weight_tying)
 
         for pn, p in self.named_parameters():
             # apply special scaled init to the residual projections, per GPT-2 paper
