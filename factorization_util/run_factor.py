@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torch.nn.functional as F
 import numpy as np
 import os
 import argparse
@@ -12,8 +13,14 @@ from rich.console import Console
 from rich.table import Table
 from rich.progress import Progress, BarColumn, TextColumn
 
-# Factorization function with configurable A and seed
-def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id):
+# Custom loss function for direction and magnitude alignment
+def direction_magnitude_loss(reconstructed_matrix, original_matrix):
+    cosine_loss = 1 - F.cosine_similarity(reconstructed_matrix, original_matrix, dim=1).mean()
+    norm_loss = F.mse_loss(reconstructed_matrix.norm(dim=1), original_matrix.norm(dim=1))
+    return cosine_loss + norm_loss
+
+# Factorization function with configurable A, seed, and loss function
+def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id, output_dir=None, loss_fn='mse'):
     A = int(A)  # Ensure A is an integer
     torch.manual_seed(seed)
     n_rows, n_cols = original_matrix.shape
@@ -22,20 +29,47 @@ def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, tas
     W2 = torch.randn((A, n_cols), requires_grad=True, device=device)
 
     optimizer = optim.Adam([W1, W2], lr=1e-3)
-    loss_fn = nn.MSELoss()
+
+    # Choose the loss function
+    if loss_fn == 'mse':
+        loss_fn_obj = nn.MSELoss()
+    elif loss_fn == 'mae':
+        loss_fn_obj = nn.L1Loss()
+    elif loss_fn == 'huber':
+        loss_fn_obj = nn.SmoothL1Loss()
+    elif loss_fn == 'cosine':
+        loss_fn_obj = lambda pred, target: 1 - F.cosine_similarity(pred.flatten(), target.flatten(), dim=0).mean()
+    elif loss_fn == 'frobenius':
+        loss_fn_obj = lambda pred, target: torch.norm(pred - target, p='fro')
+    elif loss_fn == 'direction_magnitude':
+        loss_fn_obj = direction_magnitude_loss
+
+    best_W1, best_W2, best_loss = None, None, float('inf')
 
     for epoch in range(num_epochs):
         optimizer.zero_grad()
         reconstructed_matrix = torch.matmul(W1, W2)
-        loss = loss_fn(reconstructed_matrix, original_matrix)
+        loss = loss_fn_obj(reconstructed_matrix, original_matrix)
         loss.backward()
         optimizer.step()
 
+        if loss.item() < best_loss:
+            best_loss = loss.item()
+            best_W1, best_W2 = W1.detach().cpu().numpy(), W2.detach().cpu().numpy()
+
         progress.update(task_id, advance=1, description=f"Loss: {loss.item():.4f}")
 
-    return loss.item()
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        wte_file_path = os.path.join(output_dir, f"{A}_{seed}_wte.npy")
+        scale_matrices_file_path = os.path.join(output_dir, f"{A}_{seed}_scale_matrices.npz")
+        np.save(wte_file_path, best_W1)
+        np.savez(scale_matrices_file_path, scale_up=best_W2, scale_down=best_W2)
+        print(f"Saved W1 to {wte_file_path} and W2 to {scale_matrices_file_path}")
 
-def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_step, A_end, num_epochs, num_seeds, original_matrix, device, output_csv):
+    return best_loss, best_W1, best_W2
+
+def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_step, A_end, num_epochs, num_seeds, original_matrix, device, output_csv, output_dir, loss_fn):
     search_space = vz.SearchSpace()
     feasible_values_list = []
     if A_step == 1:
@@ -58,12 +92,14 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
     results = []
     console = Console()
 
+    original_size = original_matrix.numel()
+    n_rows, n_cols = original_matrix.shape
+
     if vizier_iterations is None:
         if A_step == 1:
             vizier_iterations = A_end - A_start + 1
         else:
             vizier_iterations = len(feasible_values_list)
-
 
     for i in range(vizier_iterations):
         print("Vizier Iteration", i)
@@ -72,6 +108,9 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
             params = suggestion.parameters
             A = params["A"]
             seed_losses = []
+            best_seed_loss = float('inf')
+            best_W1, best_W2 = None, None
+
             for seed in range(num_seeds):
                 with Progress(
                     TextColumn("[progress.description]{task.description}"),
@@ -80,16 +119,38 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
                     refresh_per_second=1,
                 ) as progress:
                     task_id = progress.add_task(f"Training (Seed {seed+1})", total=num_epochs)
-                    loss = factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id)
+                    loss, W1, W2 = factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, task_id, output_dir, loss_fn)
                 seed_losses.append(loss)
+
+                if loss < best_seed_loss:
+                    best_seed_loss = loss
+                    best_W1, best_W2 = W1, W2
+
+            # Save the best factorization for this A
+            best_wte_file_path = os.path.join(output_dir, f"{A}_best_wte.npy")
+            best_scale_matrices_file_path = os.path.join(output_dir, f"{A}_best_scale_matrices.npz")
+            np.save(best_wte_file_path, best_W1)
+            np.savez(best_scale_matrices_file_path, scale_up=best_W2, scale_down=best_W2)
+            print(f"Saved best W1 for A={A} to {best_wte_file_path} and best W2 to {best_scale_matrices_file_path}")
+
             best_loss = min(seed_losses)
+            W1_size = best_W1.size
+            W2_size = best_W2.size
+            compression_ratio = original_size / (W1_size + W2_size)
+
             results.append({
                 "A": A,
                 "min": min(seed_losses),
                 "max": max(seed_losses),
                 "mean": mean(seed_losses),
                 "median": median(seed_losses),
-                "std": stdev(seed_losses) if len(seed_losses) > 1 else 0
+                "std": stdev(seed_losses) if len(seed_losses) > 1 else 0,
+                "num_seeds": num_seeds,
+                "loss_fn": loss_fn,
+                "W1_shape": best_W1.shape,
+                "W2_shape": best_W2.shape,
+                "original_shape": original_matrix.shape,
+                "compression_ratio": compression_ratio,
             })
             suggestion.complete(vz.Measurement(metrics={"loss": best_loss}))
 
@@ -102,6 +163,12 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
         table.add_column("Mean Loss", justify="right", style="magenta")
         table.add_column("Median Loss", justify="right", style="magenta")
         table.add_column("Std Dev", justify="right", style="magenta")
+        table.add_column("Num Seeds", justify="right", style="blue")
+        table.add_column("Loss Fn", justify="right", style="green")
+        table.add_column("W1 Shape", justify="right", style="yellow")
+        table.add_column("W2 Shape", justify="right", style="yellow")
+        table.add_column("Orig Shape", justify="right", style="yellow")
+        table.add_column("Param Ratio", justify="right", style="red")
 
         for result in results_sorted:
             table.add_row(
@@ -110,7 +177,14 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
                 f"{result['max']:.4f}",
                 f"{result['mean']:.4f}",
                 f"{result['median']:.4f}",
-                f"{result['std']:.4f}"
+                f"{result['std']:.4f}",
+                str(result["num_seeds"]),
+                result["loss_fn"],
+                str(result["W1_shape"]),
+                str(result["W2_shape"]),
+                "(" + str(result["original_shape"][0]) + ", " +
+                str(result["original_shape"][1]) + ")",
+                f"{result['compression_ratio']:.4f}",
             )
 
         console.clear()
@@ -138,7 +212,9 @@ def main():
     parser.add_argument('--A_step', type=int, default=5, help="Step between start and end.")
     parser.add_argument('--A_end', type=int, default=1000, help="Maximum value of A for optimization.")
     parser.add_argument('--output_csv', type=str, default="results.csv", help="Path to the output CSV file.")
+    parser.add_argument('--output_dir', type=str, default="out", help="Directory to save output factorization results.")
     parser.add_argument('--matrix_path', type=str, default=None, help="Path to the matrix .npy file for factorization.")
+    parser.add_argument('--loss_fn', type=str, choices=['mse', 'mae', 'huber', 'cosine', 'frobenius', 'direction_magnitude'], default='direction_magnitude', help="Loss function to use for matrix approximation.")
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "CPU")
@@ -146,7 +222,7 @@ def main():
     if args.matrix_path:
         original_matrix = torch.from_numpy(np.load(args.matrix_path)).to(device)
     else:
-        original_matrix = torch.randn(50000, 384).to(device)
+        original_matrix = torch.randn(50000, 768).to(device)
 
     run_experiment_with_vizier(
         args.vizier_algorithm,
@@ -158,7 +234,9 @@ def main():
         args.num_seeds,
         original_matrix,
         device,
-        args.output_csv
+        args.output_csv,
+        args.output_dir,
+        args.loss_fn
     )
 
 if __name__ == "__main__":
