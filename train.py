@@ -61,6 +61,9 @@ def parse_args():
     training_group.add_argument('--eval_iters', default=200, type=int)
     training_group.add_argument('--eval_only', default=False, action=argparse.BooleanOptionalAction)
 
+    # Loss variations
+    training_group.add_argument('--focus_on_top1_loss', default=False, action=argparse.BooleanOptionalAction)
+
     # Sample args
     training_group.add_argument('--max_sample_tokens', default=None, type=int, help="If set, maximum number of tokens to sample and print after each validation loss")
     training_group.add_argument('--sample_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Produce sample even if the validation loss did not improve. Allows for testing what overtraining looks like.")
@@ -708,6 +711,22 @@ class Trainer:
         return x, y
 
     @torch.no_grad()
+    def custom_loss_with_top1_focus(self, logits, targets):
+        # Compute standard cross-entropy loss
+        ce_loss = torch.nn.functional.cross_entropy(logits, targets)
+
+        # Get the top-1 predictions
+        top1_preds = torch.argmax(logits, dim=-1)
+
+        # Focus more on the top-1 prediction by adding an additional term
+        correct_top1 = (top1_preds == targets).float()  # 1 for correct, 0 for incorrect
+        top1_focus_loss = 1.0 - correct_top1  # Emphasize the wrong top-1 predictions
+
+        # Combine the original cross-entropy loss and the top-1 focus term
+        loss = ce_loss + 0.5 * top1_focus_loss.mean()  # Adjust the weight (0.5) as needed
+        return loss
+
+    @torch.no_grad()
     def estimate_loss(self):
         out = {}
         self.model.eval()
@@ -908,6 +927,10 @@ class Trainer:
 
                     with self.ctx:
                         logits, loss = self.model(self.X, self.Y)
+
+                        if self.args.focus_on_top1_loss:
+                            loss = self.custom_loss_with_top1_focus(logits, self.Y)  # Use custom loss
+
                         loss = loss / self.args.gradient_accumulation_steps
 
                     self.X, self.Y = self.get_batch('train')
