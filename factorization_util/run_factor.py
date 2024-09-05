@@ -86,7 +86,7 @@ def factorize_matrix(A, original_matrix, device, num_epochs, seed, progress, tas
 
     return best_loss, best_W1, best_W2
 
-def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_step, A_end, num_epochs, num_seeds, original_matrix, device, output_csv, output_dir, loss_fn, lr_start, lr_stop, lr_decay):
+def run_experiment_with_vizier(viz_owner, viz_studyid, vizier_algorithm, vizier_iterations, A_start, A_step, A_end, num_epochs, num_seeds, original_matrix, device, output_csv, output_dir, loss_fn, lr_start, lr_stop, lr_decay):
     search_space = vz.SearchSpace()
     feasible_values_list = []
     if A_step == 1:
@@ -103,7 +103,7 @@ def run_experiment_with_vizier(vizier_algorithm, vizier_iterations, A_start, A_s
     )
     study_config.algorithm = vizier_algorithm
     study_client = clients.Study.from_study_config(
-        study_config, owner="owner", study_id="example_study_id"
+        study_config, owner=viz_owner, study_id=viz_studyid
     )
 
     results = []
@@ -222,6 +222,8 @@ def main():
         "GRID_SEARCH", "SHUFFLED_GRID_SEARCH", "EAGLE_STRATEGY", "CMA_ES",
         "EMUKIT_GP_EI", "NSGA2", "BOCS", "HARMONICA"
     ], default="GRID_SEARCH", help="Choose the Vizier algorithm to use.")
+    parser.add_argument('--viz_owner', type=str, default="viz_owner", help="vizier owner")
+    parser.add_argument('--viz_studyid', type=str, default="0", help="study_id")
     parser.add_argument('--vizier_iterations', type=int, default=None, help="Number of Vizier iterations.")
     parser.add_argument('--num_epochs', type=int, default=2000, help="Number of training epochs.")
     parser.add_argument('--num_seeds', type=int, default=5, help="Number of random seeds for each A value.")
@@ -246,6 +248,8 @@ def main():
         original_matrix = torch.randn(50000, 768).to(device)
 
     run_experiment_with_vizier(
+        args.viz_owner,
+        args.viz_studyid,
         args.vizier_algorithm,
         args.vizier_iterations,
         args.A_start,
