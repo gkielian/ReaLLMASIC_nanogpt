@@ -48,6 +48,9 @@ def parse_args():
     training_group.add_argument('--eval_iters', default=200, type=int)
     training_group.add_argument('--eval_only', default=False, action=argparse.BooleanOptionalAction)
 
+    # Updates
+    training_group.add_argument('--update_block_size', default=False, action=argparse.BooleanOptionalAction)
+
     # Sample args
     training_group.add_argument('--max_sample_tokens', default=None, type=int, help="If set, maximum number of tokens to sample and print after each validation loss")
     training_group.add_argument('--sample_each_eval', default=False, action=argparse.BooleanOptionalAction, help="Produce sample even if the validation loss did not improve. Allows for testing what overtraining looks like.")
@@ -542,9 +545,14 @@ class Trainer:
             self.model = GPT.from_pretrained(gptconf, model_type=self.args.gpt2_type)
             self.load_data()
 
+        if self.args.update_block_size:
+            model.update_block_size(args.block_size)
+            print(f"Block size updated to {self.args.block_size}")
+
         if self.args.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.args.block_size)
             self.model_args['block_size'] = self.args.block_size
+            print(f"Block size cropped to {self.args.block_size}")
 
         self.model.to(self.device)
 
