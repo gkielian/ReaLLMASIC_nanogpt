@@ -17,6 +17,7 @@ class GPTConfig:
 
     ## Files to insert or obtain vectors from
     apply_vector_file: str = None
+    apply_vector_scaling_factor: float = 1.0
     obtain_vector_file: str = None
 
     # If Factorizing:

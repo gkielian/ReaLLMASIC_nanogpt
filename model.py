@@ -719,6 +719,7 @@ class GPT(nn.Module):
             if self.config.apply_vector_at_layer_idx is not None and layer == self.config.apply_vector_at_layer_idx:
                 x = self.apply_vector_to_layer_output(x)
             if self.config.obtain_vector_at_layer_idx is not None and layer == self.config.obtain_vector_at_layer_idx:
+                print(layer, self.config.obtain_vector_at_layer_idx)
                 x = self.obtain_vector_from_layer_output(x)
 
             layer +=1
@@ -747,7 +748,7 @@ class GPT(nn.Module):
 
         vector = np.load(self.config.apply_vector_file)
         vector_tensor = torch.from_numpy(vector).float().to(x.device)
-        x = x + self.config.scale_factor * vector_tensor
+        x = x + self.config.apply_vector_scaling_factor * vector_tensor
 
         return x
 
@@ -755,17 +756,25 @@ class GPT(nn.Module):
         """Append a vector to an existing .npy file."""
 
         # Convert the tensor back to a numpy array
-        result_vector = x.detach().cpu().numpy()
+        y = x
+        y = torch.mean(y, dim=1, keepdim=True)
+        result_vector = y.detach().cpu().numpy()
 
-        # Load the existing .npy file
-        existing_vectors = np.load(self.config.obtain_vector_file)
 
-        # Stack the existing vectors with the new result vector along a new axis
-        updated_vectors = np.vstack([existing_vectors, result_vector])
+        # try:
+        #     # Load the existing .npy file
+        #     existing_vector = np.load(self.config.obtain_vector_file)
+
+        #     # Stack the existing vectors with the new result vector along a new axis
+        #     updated_vector = existing_vector + result_vector
+        # except FileNotFoundError:
+        #     # If the file doesn't exist, initialize with the new vector
+        print(f"{self.config.obtain_vector_file} not found. Creating a new file.")
+        updated_vector = result_vector
 
         # Save the updated vectors back to the file
-        np.save(self.config.obtain_vector_file, updated_vectors)
-        print(f"Updated vectors saved to {self.config.obtain_vector_file}")
+        np.save(self.config.obtain_vector_file, updated_vector)
+        print(f"Updated vector saved to {self.config.obtain_vector_file}")
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary

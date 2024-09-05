@@ -19,6 +19,7 @@ def generate_letter_mapping(degrees: int, letter_offset: float) -> Dict[str, Tup
         's': (cos, sin),
         'a': (cos_centered, sin_centered),
         'f': (cos, -sin),
+        '<': (-1, 0),
     }
 
 def random_value(mean: float = 0.0, stdev: float = 0.02) -> float:
@@ -39,7 +40,11 @@ def map_random_to_circle(mean: float, stdev: float, random_offset: float) -> Tup
     radians += np.deg2rad(random_offset)
     return np.cos(radians), np.sin(radians)
 
-def map_value(value: str, letter_mapping: Dict[str, Tuple[float, float]], max_angle_difference: float, letter_offset: float, number_offset: float, random_offset: float, mean: float, stdev: float, random_value_pair_flag: bool, map_random_to_unit_circle_flag: bool) -> List[float]:
+def map_value(value: str, letter_mapping: Dict[str, Tuple[float, float]],
+              max_angle_difference: float, letter_offset: float, number_offset:
+              float, random_offset: float, mean: float, stdev: float,
+              random_value_pair_flag: bool, map_random_to_unit_circle_flag:
+              bool, direct_num_mapping: bool) -> List[float]:
     if value.lower() == 'r':
         if map_random_to_unit_circle_flag:
             return list(map_random_to_circle(mean, stdev, random_offset))
@@ -49,10 +54,13 @@ def map_value(value: str, letter_mapping: Dict[str, Tuple[float, float]], max_an
             return [random_value(mean, stdev)]
     try:
         numeric_value = float(value)
-        if 0 <= numeric_value <= 1:
-            return list(map_numeric_to_circle(numeric_value, max_angle_difference, number_offset))
+        if direct_num_mapping:
+            print(numeric_value)
+            return [numeric_value]
         else:
-            raise ValueError("Numeric value out of range [0, 1]")
+            if 0 <= numeric_value <= 1:
+                print("Warning: out of range outputs detected")
+            return list(map_numeric_to_circle(numeric_value, max_angle_difference, number_offset))
     except ValueError:
         return list(letter_mapping.get(value, (random_value(mean, stdev), random_value(mean, stdev))))
 
@@ -60,12 +68,13 @@ def load_csv(file_path: str) -> List[List[str]]:
     with open(file_path, newline='') as csvfile:
         return list(csv.reader(csvfile))
 
-def map_table(table: List[List[str]], letter_mapping: Dict[str, Tuple[float, float]], max_angle_difference: float, letter_offset: float, number_offset: float, random_offset: float, mean: float, stdev: float, random_value_pair_flag: bool, map_random_to_unit_circle_flag: bool) -> np.ndarray:
-    return np.array([sum([map_value(value, letter_mapping, max_angle_difference, letter_offset, number_offset, random_offset, mean, stdev, random_value_pair_flag, map_random_to_unit_circle_flag) for value in row], []) for row in table])
+def map_table(table: List[List[str]], letter_mapping: Dict[str, Tuple[float, float]], max_angle_difference: float, letter_offset: float, number_offset: float, random_offset: float, mean: float, stdev: float, random_value_pair_flag: bool, map_random_to_unit_circle_flag: bool, direct_num_mapping: bool) -> np.ndarray:
+    return np.array([sum([map_value(value, letter_mapping, max_angle_difference, letter_offset, number_offset, random_offset, mean, stdev, random_value_pair_flag, map_random_to_unit_circle_flag, direct_num_mapping) for value in row], []) for row in table])
 
 def main():
     parser = argparse.ArgumentParser(description='Generate initial_wte.npy from a CSV file.')
     parser.add_argument('--csv', type=str, required=True, help='Path to the input CSV file.')
+    parser.add_argument('--direct_num_mapping', default=False, action=argparse.BooleanOptionalAction, help='Keep numerical values as original values, may need to be used in conjunction with no-random_value_pair for correct output dimensions.')
     parser.add_argument('--degrees', type=int, default=60, help='Degrees of separation for letters (default: 60)')
     parser.add_argument('--letter_offset', type=float, default=0.0, help='Offset angle for the letter mapping (default: 0.0)')
     parser.add_argument('--number_offset', type=float, default=0.0, help='Offset angle for numeric mapping (default: 0.0)')
@@ -83,7 +92,8 @@ def main():
 
     wte = map_table(table, letter_mapping, args.max_angle_difference,
                     args.letter_offset, args.number_offset, args.random_offset,
-                    args.mean, args.stdev, args.random_value_pair, args.map_random_to_unit_circle)
+                    args.mean, args.stdev, args.random_value_pair,
+                    args.map_random_to_unit_circle, args.direct_num_mapping)
 
     print(f"Shape of wte: {wte.shape}")
     np.save(args.output, wte)
