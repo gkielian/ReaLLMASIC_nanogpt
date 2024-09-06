@@ -284,10 +284,10 @@ class CausalSelfAttention(nn.Module):
             att = None
             # manual implementation of attention
             if self.n_head != self.n_kv_group:
-              k_repeated = k.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
-              att = (q @ k_repeated.transpose(-2, -1)) / math.sqrt(k.size(-1))
+                k_repeated = k.repeat_interleave(self.n_head // self.n_kv_group, dim=1)
+                att = (q @ k_repeated.transpose(-2, -1)) / math.sqrt(k.size(-1))
             else:
-              att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
+                att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))
 
 
             # apply masks
@@ -701,11 +701,11 @@ class GPT(nn.Module):
         if self.n_embd_wte:
             tok_emb = self.transformer.scale_up(tok_emb)
         if self.config.use_abs_pos_embeddings:
-          pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
-          pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
-          x = self.transformer.drop(tok_emb + pos_emb)
+            pos = torch.arange(0, t, dtype=torch.long, device=device) # shape (t)
+            pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
+            x = self.transformer.drop(tok_emb + pos_emb)
         else:
-          x = self.transformer.drop(tok_emb)
+            x = self.transformer.drop(tok_emb)
 
         x.requires_grad_(True)  # Ensure requires_grad is True
 
@@ -762,21 +762,9 @@ class GPT(nn.Module):
         y = torch.mean(y, dim=1, keepdim=True)
         result_vector = y.detach().cpu().numpy()
 
-
-        # try:
-        #     # Load the existing .npy file
-        #     existing_vector = np.load(self.config.obtain_vector_file)
-
-        #     # Stack the existing vectors with the new result vector along a new axis
-        #     updated_vector = existing_vector + result_vector
-        # except FileNotFoundError:
-        #     # If the file doesn't exist, initialize with the new vector
-        print(f"{self.config.obtain_vector_file} not found. Creating a new file.")
-        updated_vector = result_vector
-
-        # Save the updated vectors back to the file
-        np.save(self.config.obtain_vector_file, updated_vector)
-        print(f"Updated vector saved to {self.config.obtain_vector_file}")
+        # Save the vector to file
+        np.save(self.config.obtain_vector_file, result_vector)
+        print(f"Updated avg vector saved to {self.config.obtain_vector_file}")
 
     def crop_block_size(self, block_size):
         # model surgery to decrease the block size if necessary
