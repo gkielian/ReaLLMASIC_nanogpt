@@ -22,7 +22,9 @@ class GPTConfig:
 
     # If Factorizing:
     n_embd_wte: int = None
-    n_embd_wte_scale_weight_tying: bool = False
+
+    # weight tying
+    n_embd_wte_scale_tying: bool = True
 
     # wte import/export
     import_wte_freeze: bool = False

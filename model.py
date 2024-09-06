@@ -514,7 +514,7 @@ class GPT(nn.Module):
 
         # Factorization Parameters
         self.n_embd_wte = config.n_embd_wte
-        self.n_embd_wte_scale_weight_tying = config.n_embd_wte_scale_weight_tying
+        self.n_embd_wte_scale_tying = config.n_embd_wte_scale_tying
 
         if config.quantize_wte:
             if config.n_embd_wte:
@@ -567,7 +567,7 @@ class GPT(nn.Module):
             self.transformer['scale_up'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
             self.transformer['scale_down'] = nn.Linear(config.n_embd_wte, config.n_embd, bias=False)
 
-            if self.n_embd_wte_scale_weight_tying:
+            if self.n_embd_wte_scale_tying:
                 self.transformer.scale_up.weight = self.transformer.scale_down.weight # Weight tying
 
             if config.import_scale_matrices_freeze:
@@ -584,7 +584,7 @@ class GPT(nn.Module):
 
         # import scale_matrices
         if config.import_scale_matrices_npz:
-            self.import_scale_matrices(config.import_scale_matrices_npz, config.scale_matrix_weight_tying)
+            self.import_scale_matrices(config.import_scale_matrices_npz, config.n_embd_wte_scale_tying)
 
         for pn, p in self.named_parameters():
             # apply special scaled init to the residual projections, per GPT-2 paper
@@ -669,9 +669,11 @@ class GPT(nn.Module):
     def import_scale_matrices(self, file_path, weight_tying=False):
         """Import scale_up and scale_down matrices from a numpy file."""
         scale_matrices = np.load(file_path)
-        scale_up_tensor = torch.from_numpy(scale_matrices['scale_up']).float()
-        scale_down_tensor = torch.from_numpy(scale_matrices['scale_down']).float()
+        scale_up_tensor = torch.from_numpy(scale_matrices['scale_up']).float().T
+        scale_down_tensor = torch.from_numpy(scale_matrices['scale_down']).float().T
 
+        print(scale_up_tensor.size())
+        print(scale_down_tensor.size())
         self.transformer.scale_up.weight.data.copy_(scale_up_tensor)
         self.transformer.scale_down.weight.data.copy_(scale_down_tensor)
 
@@ -833,8 +835,16 @@ class GPT(nn.Module):
                 sd[v_key_str] = v
             else:
                 # vanilla copy over the other parameters
+                print(key)
+                if config.n_embd_wte:
+                    if key == "transformer.wte.weight":
+                        continue
+                    if key == "lm_head.weight":
+                        continue
+
                 assert sd_hf[key].shape == sd[key].shape
                 with torch.no_grad():
+                    print(key)
                     sd[key].copy_(sd_hf[key])
 
         return model

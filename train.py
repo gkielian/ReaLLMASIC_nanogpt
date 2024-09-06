@@ -91,7 +91,7 @@ def parse_args():
     model_group.add_argument('--n_kv_group', default=None, type=int)
     model_group.add_argument('--n_embd', default=384, type=int, help="Size of embeddings in decoder layer and wte unless n_embd_wte is set." )
     model_group.add_argument('--n_embd_wte', default=None, type=int, help="If different from n_embd, an adapter table will be automatically created")
-    model_group.add_argument('--n_embd_wte_scale_weight_tying', default=True, action=argparse.BooleanOptionalAction, help="Enable weight tying for scale up and scale down matrices, only has effects if n_embd_wte is not 'None'.")
+    model_group.add_argument('--n_embd_wte_scale_tying', default=True, action=argparse.BooleanOptionalAction, help="Enable weight tying for scale up and scale down matrices, only has effects if n_embd_wte is not 'None'.")
     model_group.add_argument('--dropout', default=0.2, type=float)
     model_group.add_argument('--use_post_ln', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--window_size', default=None, type=int, help="Sliding window size, note this cannot be greater than block size")
@@ -918,7 +918,7 @@ class Trainer:
                     if losses['val'] > self.best_val_loss:
                         num_steps_with_worse_loss += 1
 
-                if self.iter_num == 0 and self.args.eval_only:
+                if self.args.eval_only:
                     break
 
                 for micro_step in range(self.args.gradient_accumulation_steps):
