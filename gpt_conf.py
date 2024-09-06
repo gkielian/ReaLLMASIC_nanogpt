@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field, asdict, fields
+f:vertical Gstatusrom dataclasses import dataclass, field, asdict, fields
 from typing import List
 import json
 @dataclass
@@ -60,6 +60,7 @@ class GPTConfig:
     # MLP Options
     use_parallel_mlp: bool = False
     mlp_variant: str = "mlp"
+    mlp_expansion_factor: int = 4
 
     ## KAN Option
     kan_poly_order: int = 3

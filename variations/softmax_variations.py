@@ -189,7 +189,7 @@ class Strongermax(nn.Module):
             # else we use real xmax
             max_x = x.max(dim=self.dim, keepdim=True).values
             if self.overflow_recompute:
-                if (torch.max(x - self.xmax_guess)) > (self.xmax_guess  + 88):
+                if (torch.max(x - self.xmax_guess)) > 88:
                     x_adj = x - max_x
                 else:
                     x_adj = x - self.xmax_guess

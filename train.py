@@ -115,6 +115,7 @@ def parse_args():
     ## MLP Options
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
     model_group.add_argument("--mlp_variant", type=str, default="mlp", choices=["mlp", "kan", "swiglu"], help="MLP variation type")
+    model_group.add_argument("--mlp_expansion_factor", type=int, default=4, help="If MLP like variant is used, set the expansion factor for the linear transformations, default is 4.")
 
     ## KAN Options
     model_group.add_argument("--kan_poly_order", type=int, default=3, help="Order of KAN non-linearity")
@@ -284,11 +285,9 @@ def parse_args():
     model_group.add_argument( "--fire_mlp_width", type=int, default=32, help="mlp_width: one hidden dimension of linear layers in mlp in FIRE")
     model_group.add_argument( "--fire_init_c", type=float, default=0.1, help="init_c: initial value of log transformation parameter c in FIRE")
     model_group.add_argument( "--fire_init_L", type=float, default=512.0, help="init_L: initial value of threshold L in FIRE (fixed values without L_multiplier)")
-    model_group.add_argument( "--fire_outermost_sigma", type=bool, default=False, help="whether or not adding outermost sigma in mlp in FIRE")
-
+    model_group.add_argument( "--fire_outermost_sigma", type=bool, default=False, action=argparse.BooleanOptionalAction, help="whether or not adding outermost sigma in mlp in FIRE")
 
     # SOFTMAX VARIATIONS
-
     softmax_variations = [
         "saturatingconsmax",
         "consmax",
@@ -469,6 +468,8 @@ class Trainer:
 
         if self.args.create_statistics:
             self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
+
+        self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
 
     def setup(self):
         # Setup DDP
