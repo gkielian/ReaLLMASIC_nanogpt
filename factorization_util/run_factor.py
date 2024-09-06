@@ -237,15 +237,22 @@ def main():
     parser.add_argument('--lr_start', type=float, default=1e-3, help="Initial learning rate.")
     parser.add_argument('--lr_stop', type=float, default=1e-5, help="Final learning rate for decay.")
     parser.add_argument('--lr_decay', type=str, choices=['none', 'cosine', 'linear'], default='cosine', help="Learning rate decay method.")
+    parser.add_argument('--random_init_matrix', action='store_true', help="Use randomly initialized matrix with specified mean and stddev.")
+    parser.add_argument('--mean', type=float, default=0.0, help="Mean of the random matrix initialization.")
+    parser.add_argument('--stddev', type=float, default=0.02, help="Standard deviation of the random matrix initialization.")
+    parser.add_argument('--random_matrix_vocab', type=float, default=50257, help="Random matrix vocab dimension (default tiktoken 50257).")
+    parser.add_argument('--random_matrix_n_embd', type=float, default=768, help="Random matrix n_embd dimension (default 768).")
 
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if args.matrix_path:
+    if args.random_init_matrix:
+        original_matrix = torch.normal(mean=args.mean, std=args.stddev, size=(args.random_matrix_vocab, args.random_matrix_n_embd)).to(device)
+    elif args.matrix_path:
         original_matrix = torch.from_numpy(np.load(args.matrix_path)).to(device)
     else:
-        original_matrix = torch.randn(50000, 768).to(device)
+        original_matrix = torch.randn(args.random_matrix_vocab, ags.random_matrix_n_embd).to(device)
 
     run_experiment_with_vizier(
         args.viz_owner,
