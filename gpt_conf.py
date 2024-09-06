@@ -1,4 +1,4 @@
-f:vertical Gstatusrom dataclasses import dataclass, field, asdict, fields
+from dataclasses import dataclass, field, asdict, fields
 from typing import List
 import json
 @dataclass

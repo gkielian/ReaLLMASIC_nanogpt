@@ -252,18 +252,6 @@ def main():
         print_model_blocks(model)
         print_module_structure(model)
 
-    if args.eval_only:
-        print("Running in eval_only mode...")
-        # Load the validation dataset
-        print(model.config.block_size)
-        val_data = load_validation_data(model.config.block_size,
-                                        args.eval_dataset)
-        # Calculate validation loss
-        val_loss = calculate_validation_loss(model, val_data,
-                                             model.config.block_size,
-                                             args.eval_iters, args.device, ptdtype)
-        print(f"Validation Loss: {val_loss:.4f}")
-        return
 
     if args.compile:
         model = torch.compile(model)
@@ -280,6 +268,18 @@ def main():
     if args.rope_length:
         model.update_rope_length(args.rope_length)
 
+    if args.eval_only:
+        print("Running in eval_only mode...")
+        # Load the validation dataset
+        print(model.config.block_size)
+        val_data = load_validation_data(model.config.block_size,
+                                        args.eval_dataset)
+        # Calculate validation loss
+        val_loss = calculate_validation_loss(model, val_data,
+                                             model.config.block_size,
+                                             args.eval_iters, args.device, ptdtype)
+        print(f"Validation Loss: {val_loss:.4f}")
+        return
 
     x = torch.tensor(start_ids, dtype=torch.long, device=args.device)[None, ...]
     # Obtain vector from the specified layer and save it to a file if required

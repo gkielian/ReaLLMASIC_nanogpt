@@ -469,8 +469,6 @@ class Trainer:
         if self.args.create_statistics:
             self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
 
-        self.stats = initialize_statistics(self.args.n_layer, self.args.n_head)
-
     def setup(self):
         # Setup DDP
         self.ddp = int(os.environ.get('RANK', -1)) != -1
