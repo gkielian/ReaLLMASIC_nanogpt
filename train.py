@@ -747,11 +747,16 @@ class Trainer:
         dataset = None
         data = None
         if self.args.dataset_list:
-            # If multi-dataset sampling is enabled, randomly pick a dataset
+            # If multi-dataset sampling is enabled, pick a dataset using sampling probabilities
             if target_dataset:
                 dataset = target_dataset
             else:
-                dataset = np.random.choice(self.args.dataset_list)
+                if self.args.dataset_sampling_probs:
+                    # Sample dataset based on probabilities
+                    dataset = np.random.choice(self.args.dataset_list, p=self.args.dataset_sampling_probs)
+                else:
+                    # Default to uniform sampling if probabilities are not provided
+                    dataset = np.random.choice(self.args.dataset_list)
             data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
         else:
             # Else use the 'dataset' arg by default for backwards compatibility
