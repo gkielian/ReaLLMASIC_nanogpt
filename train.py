@@ -300,6 +300,7 @@ def parse_args():
         "consmax_quan",
         "polymax",
         "relumax",
+        "relu2max",
         "sigmoidmax",
         "vpolymax",
         "exppolymax",
@@ -339,6 +340,9 @@ def parse_args():
 
     ### ReLUMax Options
     model_group.add_argument("--relumax_divisor", type=float, default=256.0)
+
+    ### ReLU2Max Options
+    model_group.add_argument("--relu2max_divisor", type=float, default=256.0)
 
     ### SimgoidMax Options
     model_group.add_argument("--sigmoidmax_divisor", type=float, default=256.0)
