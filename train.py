@@ -153,6 +153,7 @@ def parse_args():
             "mish",
             "prelu",
             "relu6",
+            "relu",
             "rrelu",
             "selu",
             "sigmoid",
