@@ -317,6 +317,7 @@ def parse_args():
     ## Selection of softmax variation for attention and output layers
     model_group.add_argument("--softmax_variant_attn", type=str, default="softmax", choices=softmax_variations)
     model_group.add_argument("--softmax_variant_output", type=str, default="softmax", choices=softmax_variations)
+    model_group.add_argument("--disable_flash_attention", default=False, action=argparse.BooleanOptionalAction, help="manual setting to disable flash attention")
 
     ## Custom Softmax Variation Options
     ### ConSmax and SaturatingConSmax Options
