@@ -217,7 +217,7 @@ class FIRE(nn.Module):
         self.fire_log_bias = config.fire_log_bias
 
         # Option to conditionally add bias based on the attn value
-        self.conditional_addition = config.use_firelu
+        self.use_firelu = config.use_firelu
 
     def forward(self, x: torch.Tensor, attn: torch.Tensor):
         seq_length = x.size(1)
