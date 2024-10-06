@@ -561,8 +561,6 @@ class GPT(nn.Module):
             self.num_datasets = config.lsv_dataset_num
             print(config.lsv_variant)
             self.lsv_matrix = lsv_dictionary[config.lsv_variant](config)
-            print(self.lsv_matrix)
-
 
             # self.lsv_matrix = LSVMatrix(config, 0, self.num_datasets)
 
@@ -772,6 +770,9 @@ class GPT(nn.Module):
             x = self.transformer.drop(tok_emb)
 
         x.requires_grad_(True)  # Ensure requires_grad is True
+
+        if self.use_lsv and self.config.apply_lsv_at_layer_idx == 0:
+            x = self.lsv_matrix(x)
 
         layer = 1
         for block in self.transformer.h:

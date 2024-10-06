@@ -192,6 +192,7 @@ def main():
             save_quantized_data(state_dict, args.quantization_data_file)
 
         model.load_state_dict(state_dict, strict=False)
+
     else:
         # Need to create a completely "default" GPTConfig and overwrite using model_variations
         gptconf = GPTConfig()
@@ -298,11 +299,13 @@ def main():
     if args.interactive:
         interactive_generation(model, start_ids, args.device, args.max_new_tokens, args.temperature, args.top_k, args.stop_string, decode, encode)
     else:
-        x = torch.tensor(start_ids, dtype=torch.long, device=args.device)[None, ...]
         # Run generation
         with torch.no_grad():
             with ctx:
                 for k in range(args.num_samples):
+                    model.set_lsv_index(k % 2)
+                    x = torch.tensor(start_ids, dtype=torch.long, device=args.device)[None, ...]
+                    print("vector", k%2)
                     block_size = args.block_size if args.block_size else model.config.block_size
                     for step in range(args.max_new_tokens):
                         idx_cond = x if x.size(1) <= block_size else x[:, -block_size:]

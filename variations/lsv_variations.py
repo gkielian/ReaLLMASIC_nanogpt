@@ -2,8 +2,6 @@
 import torch
 import torch.nn as nn
 
-device="cuda"
-
 # Helper Mixin factoring out the freezing process
 class FreezeNonSelectedMixin:
     def freeze_non_selected_rows(self, lsv_matrix, lsv_index):
@@ -20,6 +18,7 @@ class FreezeNonSelectedMixin:
 class LSVBase(nn.Module):
     def __init__(self, config):
         super().__init__()
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.lsv_index = 0    # Dataset index default to zero
         self.lsv_dataset_num = config.lsv_dataset_num
         self.lsv_embd_dim = config.n_embd
@@ -40,9 +39,9 @@ class OneHotLSV(LSVBase, FreezeNonSelectedMixin):
         super().__init__(config)
 
         # Initialize the lsv_matrix and one-hot vector
-        self.lsv_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, config.n_embd))
+        self.lsv_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, config.n_embd, device=self.device))
         torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
-        self.one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=device)
+        self.one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=self.device)
 
     def forward(self, x):
         # Freeze all rows that are not selected by the one-hot vector
@@ -66,15 +65,15 @@ class LinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
         super().__init__(config)
 
         # Initialize the lsv_matrix and learned combination weights
-        self.lsv_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, config.n_embd))
+        self.lsv_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, config.n_embd, device=self.device))
         torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
 
         # Learnable linear combination vector
-        self.linear_comb_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, self.lsv_dataset_num))
+        self.linear_comb_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, self.lsv_dataset_num, device=self.device))
         torch.nn.init.normal_(self.linear_comb_matrix, mean=0.00, std=0.02)
 
         # One hot for selecting linear_combination
-        self.one_hot_vector = torch.zeros(self.lsv_dataset_num, device=device)
+        self.one_hot_vector = torch.zeros(self.lsv_dataset_num, device=self.device)
 
     def forward(self, x):
 
@@ -106,7 +105,7 @@ class OneHotMLPLSV(LSVBase):
         self.mlps = nn.ModuleList()
 
         # Create a tensor containing the constant input "1"
-        self.constant_input = torch.tensor([[1.0]])
+        self.constant_input = torch.tensor([[1.0]], device=self.device)
 
         for _ in range(self.lsv_dataset_num):
             mlp_layers = []
@@ -115,7 +114,7 @@ class OneHotMLPLSV(LSVBase):
             mlp_layers.append(nn.Linear(mlp_width, mlp_width))
             mlp_layers.append(nn.ReLU())
             mlp_layers.append(nn.Linear(mlp_width, config.n_embd))  # Output is embedding dimension size
-            self.mlps.append(nn.Sequential(*mlp_layers))
+            self.mlps.append(nn.Sequential(*mlp_layers).to(self.device))
 
     def freeze_non_selected_mlps(self):
         """
@@ -154,11 +153,11 @@ class RunningAverageLinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
         super().__init__(config)
 
         # Initialize running averages for each dataset index using EMA
-        self.running_averages = torch.zeros(self.lsv_dataset_num, config.n_embd, device=device)
+        self.running_averages = torch.zeros(self.lsv_dataset_num, config.n_embd, device=self.device)
         self.ema_alpha = ema_alpha  # Smoothing factor for EMA
 
         # Learnable linear combination matrix (like before)
-        self.linear_comb_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, self.lsv_dataset_num))
+        self.linear_comb_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, self.lsv_dataset_num, device=self.device))
         torch.nn.init.normal_(self.linear_comb_matrix, mean=0.00, std=0.02)
 
     def update_running_average(self, x):

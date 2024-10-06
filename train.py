@@ -86,6 +86,7 @@ def parse_args():
 
     # Add a new argument for specifying multiple datasets
     training_group.add_argument('--dataset_list', default=None, nargs='+', type=str, help="If not None, training will be done from a list of datasets to train on, e.g. --dataset_list shakespeare wikitext103 openwebtext")
+    training_group.add_argument('--dataset_interleaving', default=False, action=argparse.BooleanOptionalAction)
     training_group.add_argument('--dataset_sampling_probs', default=None, nargs='+', type=float, help="Sampling probabilities for each dataset in dataset_list.")
     training_group.add_argument('--dataset_sampling_probs_final', default=None, nargs='+', type=float, help="If, set final sampling probabilities for each dataset in dataset_list.")
     training_group.add_argument('--dataset_sampling_probs_transition_method', default=None, type=str, choices=["linear", "cosine", "exponential"])
@@ -791,6 +792,8 @@ class Trainer:
 
     def get_batch(self, split, target_dataset=None):
         dataset = None
+
+
         data = None
         def interpolate_probs(initial_probs, final_probs, method, step_ratio):
             if method == 'linear':
@@ -814,13 +817,24 @@ class Trainer:
             # If multi-dataset sampling is enabled, pick a dataset using sampling probabilities
             if target_dataset:
                 dataset = target_dataset
+            elif self.args.dataset_interleaving:
+                num_datasets = len(self.args.dataset_list)
+                dataset_index = self.iter_num % num_datasets
+                dataset = self.args.dataset_list[dataset_index]
+                # print(dataset)
+                if self.args.use_lsv:
+                    self.model.set_lsv_index(self.args.dataset_list.index(dataset))
+                data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
             else:
+                print("using probabilities")
                 if self.args.dataset_sampling_probs:
                     # Sample dataset based on probabilities
                     dataset = np.random.choice(self.args.dataset_list, p=get_transitioned_probs() / np.sum(get_transitioned_probs()))
                 else:
                     # Default to uniform sampling if probabilities are not provided
                     dataset = np.random.choice(self.args.dataset_list)
+                print(dataset)
+
             if self.args.use_lsv:
                 self.model.set_lsv_index(self.args.dataset_list.index(dataset))
             data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
