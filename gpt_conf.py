@@ -14,6 +14,11 @@ class GPTConfig:
     ## Where to intercept
     apply_vector_at_layer_idx: int = None
     obtain_vector_at_layer_idx: int = None
+    use_lsv: bool = False
+    lsv_index: int = None
+    lsv_dataset_num: int = None
+    lsv_variant: str = "one_hot"
+    apply_lsv_at_layer_idx: int = None
 
     ## Files to insert or obtain vectors from
     apply_vector_file: str = None

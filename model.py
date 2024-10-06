@@ -26,6 +26,7 @@ from gpt_conf import GPTConfig
 import torch.utils.checkpoint as checkpoint
 
 # Variations
+from variations.lsv_variations import lsv_dictionary
 from variations.softmax_variations import softmax_dictionary
 from variations.norm_variations import norm_dictionary
 from variations.position_encoding_variations import QuantizedEmbedding, RotaryEmbedding, SymmetricalOverlapAngularPositions, FIRE
@@ -551,6 +552,26 @@ class GPT(nn.Module):
         self.n_embd_wte = config.n_embd_wte
         self.n_embd_wte_scale_tying = config.n_embd_wte_scale_tying
 
+        # Learned Steering Vectors
+        self.use_lsv = config.use_lsv
+        self.lsv_index = config.lsv_index
+        self.lsv_dataset_num = config.lsv_dataset_num
+
+        if config.lsv_dataset_num is not None and config.use_lsv:
+            self.num_datasets = config.lsv_dataset_num
+            print(config.lsv_variant)
+            self.lsv_matrix = lsv_dictionary[config.lsv_variant](config)
+            print(self.lsv_matrix)
+
+
+            # self.lsv_matrix = LSVMatrix(config, 0, self.num_datasets)
+
+            # self.lsv_matrix = nn.Parameter(torch.empty(self.num_datasets, config.n_embd))
+
+            # # Initialize the matrix with normal distribution (mean = 0, stddev = 0.02)
+            # torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
+
+        # Configure wte, with optional quantization and factoring
         if config.quantize_wte:
             if config.n_embd_wte:
                 # If factorization is set
@@ -572,6 +593,13 @@ class GPT(nn.Module):
             h = nn.ModuleList([Block(config, mlp=shared_mlp_array[i], attn=shared_attn_array[i]) for i in range(config.n_layer)]),
             ln_f = norm_dictionary[config.norm_variant_output](config),
         ))
+
+        # if self.config.use_dataset_embeddings:
+        #     if config.quantize_wpe:
+        #         dataset_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantize_wpe_method, config.quantize_wpe_bits)
+        #     else:
+        #         dataset_embd = nn.Embedding(config.block_size, config.n_embd)
+        #     self.transformer['wde'] = dataset_embd
 
         if self.config.use_abs_pos_embeddings:
             if config.quantize_wpe:
@@ -753,6 +781,11 @@ class GPT(nn.Module):
             else:
                 x = block(x)
 
+            # Intercept for Learned Steering Vectors
+            if self.use_lsv and layer == self.config.apply_lsv_at_layer_idx:
+                x = self.lsv_matrix(x)
+                # x = self.apply_learned_vector_to_layer_output(x)
+
             # Intercept for Steering Vectors
             if self.config.apply_vector_at_layer_idx is not None and layer == self.config.apply_vector_at_layer_idx:
                 x = self.apply_vector_to_layer_output(x)
@@ -777,6 +810,45 @@ class GPT(nn.Module):
             loss = None
 
         return logits, loss
+
+    def set_lsv_scaling_factor(self, factor):
+        self.config.apply_vector_scaling_factor = factor
+
+    def get_lsv_scaling_factor(self):
+        return self.config.apply_vector_scaling_factor
+
+    def set_lsv_index(self, index):
+        self.lsv_matrix.update_lsv_index(index)
+
+    def freeze_non_lsv_parameters(self):
+        """Freeze all parameters except for lsv_matrix if lsv_focused_training is enabled."""
+
+        print("Freezing all parameters except for lsv_matrix")
+
+        # Freeze all parameters by setting requires_grad to False
+        for name, param in self.named_parameters():
+            if name != "lsv_matrix":
+                param.requires_grad = False
+            else:
+                param.requires_grad = True  # Ensure lsv_matrix can still be trained
+
+    def apply_learned_vector_to_layer_output(self, x):
+        """Conditionally add a vector based on dataset index to the output of a specific layer."""
+
+        # Use one-hot vector for the dataset and multiply by the learned parameter matrix
+        one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=x.device)
+        one_hot_vector[self.lsv_index] = 1.0
+
+        # Multiply the one-hot vector by the learned parameter matrix
+        selected_vector = torch.matmul(one_hot_vector, self.lsv_matrix)
+
+        # print(self.lsv_matrix.size())
+        # print(selected_vector.size())
+        # Add the selected parameter vector to the output
+        # print(x.size())
+        x = x + selected_vector
+
+        return x
 
     def apply_vector_to_layer_output(self, x):
         """Conditionally add a vector from a file to the output of a specific layer."""
@@ -1026,4 +1098,50 @@ class MoELayer(nn.Module):
                 final_output[expert_mask] += weighted_output.squeeze(1)
         # print(f"final_output.shape = {final_output.shape}\n")
         return final_output
+
+
+# class LSVMatrix(nn.Module):
+#     def __init__(self, config, lsv_index=0, num_datasets=1, scaling_factor = 1.0):
+#         """
+#         Initialize the module with the learned steering vector (lsv) matrix and the index for the dataset.
+#         Args:
+#             lsv_matrix (torch.Tensor): The matrix of learned vectors.
+#             lsv_index (int): The initial index of the dataset (default 0).
+#         """
+#         super(LSVMatrix, self).__init__()
+#         self.lsv_index = lsv_index    # Dataset index
+#         self.num_datasets = num_datasets
+#         self.lsv_matrix = nn.Parameter(torch.empty(self.num_datasets, config.n_embd))
+#         self.scaling_factor = scaling_factor
+#         torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
+
+#     def forward(self, x, scaling_factor = 1.5):
+#         """
+#         Forward pass where the learned vector corresponding to the dataset index is added to the layer output.
+#         Args:
+#             x (torch.Tensor): The output of the layer to which the vector is added.
+#         Returns:
+#             torch.Tensor: The modified layer output with the learned vector added.
+#         """
+#         # Create a one-hot vector for the dataset index
+#         self.scaling_factor = scaling_factor
+#         one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=x.device)
+#         one_hot_vector[self.lsv_index] = 1.0 * self.scaling_factor
+#         print(self.lsv_index, scaling_factor)
+
+#         # Multiply the one-hot vector by the learned parameter matrix to get the selected vector
+#         selected_vector = torch.matmul(one_hot_vector, self.lsv_matrix)
+
+#         # Add the selected vector to the input tensor x
+#         x = x + selected_vector
+
+#         return x
+
+#     def update_lsv_index(self, new_index):
+#         """
+#         Update the dataset index (lsv_index) for selecting a different vector.
+#         Args:
+#             new_index (int): The new index to set for the learned steering vector.
+#         """
+#         self.lsv_index = new_index
 

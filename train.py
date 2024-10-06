@@ -87,6 +87,8 @@ def parse_args():
     # Add a new argument for specifying multiple datasets
     training_group.add_argument('--dataset_list', default=None, nargs='+', type=str, help="If not None, training will be done from a list of datasets to train on, e.g. --dataset_list shakespeare wikitext103 openwebtext")
     training_group.add_argument('--dataset_sampling_probs', default=None, nargs='+', type=float, help="Sampling probabilities for each dataset in dataset_list.")
+    training_group.add_argument('--dataset_sampling_probs_final', default=None, nargs='+', type=float, help="If, set final sampling probabilities for each dataset in dataset_list.")
+    training_group.add_argument('--dataset_sampling_probs_transition_method', default=None, type=str, choices=["linear", "cosine", "exponential"])
 
 
     # Model args
@@ -107,15 +109,31 @@ def parse_args():
     model_group.add_argument('--moe_top_k', default=2, type=int)
     model_group.add_argument('--moe_router_scheme', default="softmax", type=str, help="option to set routing scheme for MoE layer, defaults to softmax")
 
-    ## Steering Vector Opts
-    ### options for application of steering vectors
+
+    ## Manual Steering Vector Options
+
+    ### Applying Steering Vectors
     model_group.add_argument('--apply_vector_at_layer_idx', default=None, type=int)
     model_group.add_argument("--apply_vector_file", type=str, default=None, help="single vector to apply with scaling factor")
     model_group.add_argument("--apply_vector_scaling_factor", type=float, default=1.0, help="scaling factor to apply to steering vector")
 
-    ### options for intercepting vectors
+    ### Options for intercepting and obtaining vectors
     model_group.add_argument('--obtain_vector_at_layer_idx', default=None, type=int)
     model_group.add_argument("--obtain_vector_file", type=str, default=None, help="initial KAN activation")
+
+    ## Learned Steering Vector (LSV) Options
+    lsv_variations = [
+            "one_hot",
+            "linear_comb",
+            "one_hot_mlp",
+            "avg_linear_comb",
+        ]
+    model_group.add_argument("--use_lsv", default=False, action=argparse.BooleanOptionalAction, help="whether to use Learned Steering Vectors")
+    model_group.add_argument("--lsv_index", default=None, type=int, help="Which steering vector to use")
+    model_group.add_argument("--lsv_variant", default="one_hot", type=str, choices=lsv_variations, help="Which steering vector to use")
+    model_group.add_argument('--apply_lsv_at_layer_idx', default=None, type=int)
+
+    training_group.add_argument("--lsv_focused_training", default=False, action=argparse.BooleanOptionalAction, help="train but only unfreeze lsv")
 
     ## MLP Options
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
@@ -527,6 +545,10 @@ class Trainer:
 
         # Training settings
         self.training_args = {action.dest: getattr(self.args, action.dest) for action in self.training_group._group_actions}
+        if self.args.dataset_list is not None:
+            self.model_args['lsv_dataset_num'] = len(self.args.dataset_list)
+            print("self.model_args['lsv_dataset_num']")
+            print(self.model_args['lsv_dataset_num'])
 
         if self.args.init_from == 'scratch':
             self.model_args['vocab_size'] = self.get_vocab_size_from_meta()
@@ -573,6 +595,8 @@ class Trainer:
                     state_dict[k[len('_orig_mod.'):]] = state_dict.pop(k)
             self.model.load_state_dict(state_dict)
             self.best_val_loss = checkpoint['best_val_loss']
+            if self.args.lsv_focused_training:
+                self.model.freeze_non_lsv_parameters()
 
         elif self.args.init_from.startswith('gpt2'):
 
@@ -589,6 +613,9 @@ class Trainer:
             gptconf = GPTConfig(**self.model_args)
             self.model = GPT.from_pretrained(gptconf, model_type=self.args.gpt2_type)
             self.load_data()
+
+            if self.args.lsv_focused_training:
+                self.model.freeze_non_lsv_parameters()
 
         if self.args.block_size < self.model.config.block_size:
             self.model.crop_block_size(self.args.block_size)
@@ -660,20 +687,32 @@ class Trainer:
             raise FileNotFoundError(f"Meta file not found at {meta_path}")
 
     def sample_and_print(self, max_sample_tokens, start_tokens="\n"):
-        start_ids = torch.tensor(self.encode(start_tokens), dtype=torch.long, device=self.device)[None, ...]
-        x = start_ids
-        with torch.no_grad():
-            for _ in range(max_sample_tokens):
-                x_cond = x if x.size(1) <= self.args.block_size else x[:, -self.args.block_size:]
-                logits, _ = self.model(x_cond)
-                logits = logits[:, -1, :]
-                probs = torch.softmax(logits, dim=-1)
-                next_id = torch.multinomial(probs, num_samples=1)
-                x = torch.cat((x, next_id), dim=1)
+        # Do one iteration per lsv, default to one with no lsv
+        sample_iterations = 1
 
-        sampled_text = self.decode(x[0].tolist())
-        print(f"Start tokens:\n{start_tokens}\n")
-        print(f"Sampled text:\n{sampled_text}\n")
+        if self.args.dataset_list is not None:
+            sample_iterations = len(self.args.dataset_list)
+
+        for i in range(sample_iterations):
+            orig_scaling_factor = self.model.get_lsv_scaling_factor
+            if self.args.use_lsv:
+                self.model.set_lsv_index(i)
+                print(f"lsv index {i}")
+            start_ids = torch.tensor(self.encode(start_tokens), dtype=torch.long, device=self.device)[None, ...]
+            x = start_ids
+            with torch.no_grad():
+                    for _ in range(max_sample_tokens):
+                        x_cond = x if x.size(1) <= self.args.block_size else x[:, -self.args.block_size:]
+                        logits, _ = self.model(x_cond)
+                        logits = logits[:, -1, :]
+                        probs = torch.softmax(logits, dim=-1)
+                        next_id = torch.multinomial(probs, num_samples=1)
+                        x = torch.cat((x, next_id), dim=1)
+
+            sampled_text = self.decode(x[0].tolist())
+            print(f"Start tokens:\n{start_tokens}\n")
+            print(f"Sampled text:\n{sampled_text}\n")
+        self.model.set_lsv_scaling_factor(orig_scaling_factor)
 
     def get_vocab_size_from_meta(self):
         # Data loader
@@ -749,9 +788,28 @@ class Trainer:
                 self.train_data_dict[dataset] = train_data
                 self.val_data_dict[dataset] = val_data
 
+
     def get_batch(self, split, target_dataset=None):
         dataset = None
         data = None
+        def interpolate_probs(initial_probs, final_probs, method, step_ratio):
+            if method == 'linear':
+                return initial_probs + step_ratio * (final_probs - initial_probs)
+            elif method == 'cosine':
+                return initial_probs + 0.5 * (1 - np.cos(np.pi * step_ratio)) * (final_probs - initial_probs)
+            elif method == 'exponential':
+                return initial_probs * (final_probs / initial_probs) ** step_ratio
+            else:
+                raise ValueError(f"Unknown transition method: {method}")
+
+        def get_transitioned_probs():
+            initial_probs = np.array(self.args.dataset_sampling_probs)
+            if self.args.final_dataset_sampling_probs:
+                step_ratio = self.iter_num / self.args.max_iters
+                final_probs = np.array(self.args.dataset_sampling_probs_final)
+                return interpolate_probs(initial_probs, final_probs, self.args.transition_method, step_ratio)
+            return initial_probs
+
         if self.args.dataset_list:
             # If multi-dataset sampling is enabled, pick a dataset using sampling probabilities
             if target_dataset:
@@ -759,10 +817,12 @@ class Trainer:
             else:
                 if self.args.dataset_sampling_probs:
                     # Sample dataset based on probabilities
-                    dataset = np.random.choice(self.args.dataset_list, p=self.args.dataset_sampling_probs)
+                    dataset = np.random.choice(self.args.dataset_list, p=get_transitioned_probs() / np.sum(get_transitioned_probs()))
                 else:
                     # Default to uniform sampling if probabilities are not provided
                     dataset = np.random.choice(self.args.dataset_list)
+            if self.args.use_lsv:
+                self.model.set_lsv_index(self.args.dataset_list.index(dataset))
             data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
         else:
             # Else use the 'dataset' arg by default for backwards compatibility
@@ -819,8 +879,9 @@ class Trainer:
                     'train': dataset_losses['train'].mean(),
                     'val': dataset_losses['val'].mean()
                 }
-            for split in ['train', 'val']:
-                out[split] = out['datasets'][self.args.dataset][split]
+            print("test")
+            out['val'] = out['datasets'][self.args.dataset]['val']
+            print(out['val'])
 
         else:
             # Default behavior for a single dataset
@@ -970,7 +1031,7 @@ class Trainer:
 
                 if self.iter_num % self.args.eval_interval == 0 and self.master_process:
                     losses = self.estimate_loss()
-                    if self.args.dataset_list and len(self.args.dataset_list) > 1:
+                    if self.args.dataset_list is not None:
                         # Print loss for each dataset if multiple datasets are used
                         for dataset, dataset_losses in losses['datasets'].items():
                             print(f"step {self.iter_num}: {dataset} train loss {dataset_losses['train']:.4f}, val loss {dataset_losses['val']:.4f}")
@@ -980,6 +1041,7 @@ class Trainer:
                         print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
                         self.log_metrics(losses, lr, running_mfu, self.iter_num)
 
+                    # TODO: Support NaN checks for dataset_lists
                     if math.isnan(losses["val"]):
                         checkpoint = {
                             'model': self.raw_model.state_dict(),
