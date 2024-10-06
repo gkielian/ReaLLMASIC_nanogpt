@@ -560,14 +560,8 @@ class GPT(nn.Module):
         if config.lsv_dataset_num is not None and config.use_lsv:
             self.num_datasets = config.lsv_dataset_num
             print(config.lsv_variant)
-            self.lsv_matrix = lsv_dictionary[config.lsv_variant](config)
-
-            # self.lsv_matrix = LSVMatrix(config, 0, self.num_datasets)
-
-            # self.lsv_matrix = nn.Parameter(torch.empty(self.num_datasets, config.n_embd))
-
-            # # Initialize the matrix with normal distribution (mean = 0, stddev = 0.02)
-            # torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
+            self.lsv_variant = config.lsv_variant
+            self.lsv_matrix = lsv_dictionary[self.lsv_variant](config)
 
         # Configure wte, with optional quantization and factoring
         if config.quantize_wte:
@@ -1099,50 +1093,4 @@ class MoELayer(nn.Module):
                 final_output[expert_mask] += weighted_output.squeeze(1)
         # print(f"final_output.shape = {final_output.shape}\n")
         return final_output
-
-
-# class LSVMatrix(nn.Module):
-#     def __init__(self, config, lsv_index=0, num_datasets=1, scaling_factor = 1.0):
-#         """
-#         Initialize the module with the learned steering vector (lsv) matrix and the index for the dataset.
-#         Args:
-#             lsv_matrix (torch.Tensor): The matrix of learned vectors.
-#             lsv_index (int): The initial index of the dataset (default 0).
-#         """
-#         super(LSVMatrix, self).__init__()
-#         self.lsv_index = lsv_index    # Dataset index
-#         self.num_datasets = num_datasets
-#         self.lsv_matrix = nn.Parameter(torch.empty(self.num_datasets, config.n_embd))
-#         self.scaling_factor = scaling_factor
-#         torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
-
-#     def forward(self, x, scaling_factor = 1.5):
-#         """
-#         Forward pass where the learned vector corresponding to the dataset index is added to the layer output.
-#         Args:
-#             x (torch.Tensor): The output of the layer to which the vector is added.
-#         Returns:
-#             torch.Tensor: The modified layer output with the learned vector added.
-#         """
-#         # Create a one-hot vector for the dataset index
-#         self.scaling_factor = scaling_factor
-#         one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=x.device)
-#         one_hot_vector[self.lsv_index] = 1.0 * self.scaling_factor
-#         print(self.lsv_index, scaling_factor)
-
-#         # Multiply the one-hot vector by the learned parameter matrix to get the selected vector
-#         selected_vector = torch.matmul(one_hot_vector, self.lsv_matrix)
-
-#         # Add the selected vector to the input tensor x
-#         x = x + selected_vector
-
-#         return x
-
-#     def update_lsv_index(self, new_index):
-#         """
-#         Update the dataset index (lsv_index) for selecting a different vector.
-#         Args:
-#             new_index (int): The new index to set for the learned steering vector.
-#         """
-#         self.lsv_index = new_index
 
