@@ -51,6 +51,10 @@ def parse_args():
     parser.add_argument('--steering_vector_scaling_factor', type=float, default=1.0, help="Scaling factor to apply after subtracting vectors")
     parser.add_argument('--apply_to_layer_idx', type=int, default=None, help="Layer index at which to apply the resulting vector")
 
+    # Leanred Steering Vector Related
+    parser.add_argument('--use_lsv_', default=False, action=argparse.BooleanOptionalAction)
+    parser.add_argument('--lsv_size',  type=1, default=None, help="number of vectors to test")
+
     parser.add_argument("--eval_only", action=argparse.BooleanOptionalAction, help="Enable evaluation only mode to calculate and print validation loss")
     parser.add_argument("--eval_iters", type=int, default=250, help="iterations for evaluation")
     parser.add_argument("--eval_dataset", type=str, default=None, help="dataset for evaluation")
@@ -303,9 +307,10 @@ def main():
         with torch.no_grad():
             with ctx:
                 for k in range(args.num_samples):
-                    model.set_lsv_index(k % 2)
+                    if args.use_lsv:
+                        model.set_lsv_index(k % args.lsv_size)
+                        print("vector", k % args.lsv_size)
                     x = torch.tensor(start_ids, dtype=torch.long, device=args.device)[None, ...]
-                    print("vector", k%2)
                     block_size = args.block_size if args.block_size else model.config.block_size
                     for step in range(args.max_new_tokens):
                         idx_cond = x if x.size(1) <= block_size else x[:, -block_size:]
