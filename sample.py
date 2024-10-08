@@ -52,8 +52,8 @@ def parse_args():
     parser.add_argument('--apply_to_layer_idx', type=int, default=None, help="Layer index at which to apply the resulting vector")
 
     # Leanred Steering Vector Related
-    parser.add_argument('--use_lsv_', default=False, action=argparse.BooleanOptionalAction)
-    parser.add_argument('--lsv_size',  type=1, default=None, help="number of vectors to test")
+    parser.add_argument('--use_lsv', default=False, action=argparse.BooleanOptionalAction)
+    parser.add_argument('--lsv_size',  type=int, default=1, help="Number of vectors to test")
 
     parser.add_argument("--eval_only", action=argparse.BooleanOptionalAction, help="Enable evaluation only mode to calculate and print validation loss")
     parser.add_argument("--eval_iters", type=int, default=250, help="iterations for evaluation")
