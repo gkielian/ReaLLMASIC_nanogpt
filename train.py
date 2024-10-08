@@ -695,7 +695,6 @@ class Trainer:
             sample_iterations = len(self.args.dataset_list)
 
         for i in range(sample_iterations):
-            orig_scaling_factor = self.model.get_lsv_scaling_factor
             if self.args.use_lsv:
                 self.model.set_lsv_index(i)
                 print(f"lsv index {i}")
@@ -713,7 +712,6 @@ class Trainer:
             sampled_text = self.decode(x[0].tolist())
             print(f"Start tokens:\n{start_tokens}\n")
             print(f"Sampled text:\n{sampled_text}\n")
-        self.model.set_lsv_scaling_factor(orig_scaling_factor)
 
     def get_vocab_size_from_meta(self):
         # Data loader
