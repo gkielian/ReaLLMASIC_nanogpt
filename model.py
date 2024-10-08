@@ -586,13 +586,6 @@ class GPT(nn.Module):
             ln_f = norm_dictionary[config.norm_variant_output](config),
         ))
 
-        # if self.config.use_dataset_embeddings:
-        #     if config.quantize_wpe:
-        #         dataset_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantize_wpe_method, config.quantize_wpe_bits)
-        #     else:
-        #         dataset_embd = nn.Embedding(config.block_size, config.n_embd)
-        #     self.transformer['wde'] = dataset_embd
-
         if self.config.use_abs_pos_embeddings:
             if config.quantize_wpe:
                 pos_embd = QuantizedEmbedding(config.block_size, config.n_embd, config.quantize_wpe_method, config.quantize_wpe_bits)
