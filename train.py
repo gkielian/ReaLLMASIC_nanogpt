@@ -919,7 +919,8 @@ class Trainer:
         coeff = 0.5 * (1.0 + math.cos(math.pi * decay_ratio))
         return self.args.min_lr + coeff * (self.args.learning_rate - self.args.min_lr)
 
-    def log_metrics(self, losses, lr, running_mfu, iter_num, target_dataset=None):
+    def log_metrics(self, losses, lr, running_mfu, vram_allocated, iter_num, target_dataset=None):
+
         if self.args.tensorboard_log:
             # Log metrics for each dataset separately
             if target_dataset:
@@ -935,6 +936,7 @@ class Trainer:
 
             self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
             self.writer.add_scalar("lr", lr, iter_num)
+            self.writer.add_scalar("vram", vram_allocated, iter_num)
 
         if self.args.wandb_log and self.master_process:
             import wandb
@@ -942,6 +944,7 @@ class Trainer:
                 "iter": iter_num,
                 "lr": lr,
                 "mfu": running_mfu * 100,
+                "vram": vram_allocated,
             }
             if target_dataset:
                 log_data[f"{dataset}/train/loss"] = losses['train']
@@ -957,6 +960,11 @@ class Trainer:
                 self.write_to_csv(losses['train'].item(), losses['val'].item(), prefix=f"{target_dataset}_")
             else:
                 self.write_to_csv(losses['train'].item(), losses['val'].item())
+
+            # Other metrics
+            self.write_to_csv(iter_num, lr, running_mfu, vram_allocated, prefix="misc_")
+
+
 
 
     def write_to_csv(self, *args, prefix=""):
@@ -1001,7 +1009,7 @@ class Trainer:
                 "mfu": running_mfu*100,
             })
 
-    def log_metrics_non_validation(self, loss_training, running_mfu, iter_num, target_dataset=None):
+    def log_metrics_non_validation(self, loss_training, running_mfu, vram_allocated, iter_num, target_dataset=None):
         if self.args.tensorboard_log:
             if target_dataset:
                 self.writer.add_scalars(
@@ -1012,6 +1020,7 @@ class Trainer:
                     "loss", { "train": loss_training }, iter_num
                 )
             self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
+            self.writer.add_scalar("vram", vram_allocated, iter_num)
 
         if self.args.wandb_log and self.master_process:
             import wandb
@@ -1019,6 +1028,7 @@ class Trainer:
                 "iter": iter_num,
                 "train/loss": loss_training,
                 "mfu": running_mfu*100,
+                "vram": vram_allocated,
             })
 
     def train(self):
@@ -1043,15 +1053,16 @@ class Trainer:
 
                 if self.iter_num % self.args.eval_interval == 0 and self.master_process:
                     losses = self.estimate_loss()
+                    vram_allocated = torch.cuda.memory_allocated() / (1024 ** 2)  # Convert to MB
                     if self.args.dataset_list is not None:
                         # Print loss for each dataset if multiple datasets are used
                         for dataset, dataset_losses in losses['datasets'].items():
                             print(f"step {self.iter_num}: {dataset} train loss {dataset_losses['train']:.4f}, val loss {dataset_losses['val']:.4f}")
-                            self.log_metrics(dataset_losses, lr, running_mfu, self.iter_num, target_dataset=dataset)
+                            self.log_metrics(dataset_losses, lr, running_mfu, vram_allocated, self.iter_num, target_dataset=dataset)
                     else:
                         # Default behavior for a single dataset
                         print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
-                        self.log_metrics(losses, lr, running_mfu, self.iter_num)
+                        self.log_metrics(losses, lr, running_mfu, vram_allocated, self.iter_num)
 
                     # TODO: Support NaN checks for dataset_lists
                     if math.isnan(losses["val"]):
@@ -1170,7 +1181,9 @@ class Trainer:
                             print(f"saving checkpoint to {self.args.out_dir}")
                             torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                         sys.exit("Exiting training loss is NaN")
-                    self.log_metrics_non_validation(lossf, running_mfu, self.iter_num)
+
+                    vram_allocated = torch.cuda.memory_allocated() / (1024 ** 2)  # Convert to MB
+                    self.log_metrics_non_validation(lossf, running_mfu, vram_allocated, self.iter_num)
 
 
                 if self.args.create_statistics and local_iter_num % self.args.softmax_io_log_interval == 0:
