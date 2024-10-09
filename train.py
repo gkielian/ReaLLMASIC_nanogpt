@@ -4,6 +4,7 @@ import csv
 import json
 import math
 import os
+import random
 import pickle
 import shutil
 import sys
@@ -87,7 +88,8 @@ def parse_args():
     # Add a new argument for specifying multiple datasets
     training_group.add_argument('--dataset_list', default=None, nargs='+', type=str, help="If not None, training will be done from a list of datasets to train on, e.g. --dataset_list shakespeare wikitext103 openwebtext")
     training_group.add_argument('--dataset_interleaving', default=False, action=argparse.BooleanOptionalAction)
-    training_group.add_argument('--dataset_sampling_probs', default=None, nargs='+', type=float, help="Sampling probabilities for each dataset in dataset_list.")
+    training_group.add_argument('--dataset_interleaving_shuffle', default=False, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--dataset_sampling_probs', default=None, nargs='+', type=float, help="Sampling proportions for each dataset in dataset_list. Probabilities normally but proportions in dataset_interleaving")
     training_group.add_argument('--dataset_sampling_probs_final', default=None, nargs='+', type=float, help="If, set final sampling probabilities for each dataset in dataset_list.")
     training_group.add_argument('--dataset_sampling_probs_transition_method', default=None, type=str, choices=["linear", "cosine", "exponential"])
 
@@ -698,16 +700,18 @@ class Trainer:
             if self.args.use_lsv:
                 self.model.set_lsv_index(i)
                 print(f"lsv index {i}")
+
             start_ids = torch.tensor(self.encode(start_tokens), dtype=torch.long, device=self.device)[None, ...]
             x = start_ids
+
             with torch.no_grad():
-                    for _ in range(max_sample_tokens):
-                        x_cond = x if x.size(1) <= self.args.block_size else x[:, -self.args.block_size:]
-                        logits, _ = self.model(x_cond)
-                        logits = logits[:, -1, :]
-                        probs = torch.softmax(logits, dim=-1)
-                        next_id = torch.multinomial(probs, num_samples=1)
-                        x = torch.cat((x, next_id), dim=1)
+                for _ in range(max_sample_tokens):
+                    x_cond = x if x.size(1) <= self.args.block_size else x[:, -self.args.block_size:]
+                    logits, _ = self.model(x_cond)
+                    logits = logits[:, -1, :]
+                    probs = torch.softmax(logits, dim=-1)
+                    next_id = torch.multinomial(probs, num_samples=1)
+                    x = torch.cat((x, next_id), dim=1)
 
             sampled_text = self.decode(x[0].tolist())
             print(f"Start tokens:\n{start_tokens}\n")
@@ -790,8 +794,6 @@ class Trainer:
 
     def get_batch(self, split, target_dataset=None):
         dataset = None
-
-
         data = None
         def interpolate_probs(initial_probs, final_probs, method, step_ratio):
             if method == 'linear':
@@ -816,25 +818,62 @@ class Trainer:
             if target_dataset:
                 dataset = target_dataset
             elif self.args.dataset_interleaving:
-                num_datasets = len(self.args.dataset_list)
-                dataset_index = self.iter_num % num_datasets
-                dataset = self.args.dataset_list[dataset_index]
-                # print(dataset)
-                if self.args.use_lsv:
-                    self.model.set_lsv_index(self.args.dataset_list.index(dataset))
+                # print("using interleaving")
+                if self.args.dataset_sampling_probs is not None:
+                    # TODO: Move this section into README
+                    # sampling proportions in this case
+                    # allows for interleaving datasets
+                    # Option 1) specific complex order
+                    # a b a a b
+                    # 1 1 1 1 1
+                    # output: a b a a b
+                    # Option 2) specific ratio shorthand
+                    # a b c
+                    # 1 3 2
+                    # output: a b b b c c
+                    # Option 3) specific ratio with random shuffle
+                    # a b c
+                    # 1 2 3
+                    # possible random output: c a b c b c
+
+                    # Init if does not exist
+                    if not hasattr(self, 'remaining_datasets'):
+                        self.remaining_datasets = []
+                        # print("init")
+
+                    # Reset if zero remaining
+                    if len(self.remaining_datasets) == 0:
+                        self.remaining_datasets = [x for x, count in zip(self.args.dataset_list, self.args.dataset_sampling_probs) for _ in range(int(count))]
+
+                        # shuffle
+                        if self.args.dataset_interleaving_shuffle:
+                            random.shuffle(self.remaining_datasets)
+                        # print("reset", self.remaining_datasets)
+
+                    # pop from front of stack
+                    dataset = self.remaining_datasets.pop(0)
+                    # print("dataset", dataset, "remaining", self.remaining_datasets)
+                else:
+                    # If proportions and order not specified, then do 1:1 interleaving
+                    num_datasets = len(self.args.dataset_list)
+                    dataset_index = self.iter_num % num_datasets
+                    dataset = self.args.dataset_list[dataset_index]
+
                 data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
+                # print(dataset)
             else:
-                print("using probabilities")
+                # print("using probabilities")
                 if self.args.dataset_sampling_probs:
                     # Sample dataset based on probabilities
                     dataset = np.random.choice(self.args.dataset_list, p=get_transitioned_probs() / np.sum(get_transitioned_probs()))
                 else:
                     # Default to uniform sampling if probabilities are not provided
                     dataset = np.random.choice(self.args.dataset_list)
-                print(dataset)
+                # print(dataset)
 
             if self.args.use_lsv:
                 self.model.set_lsv_index(self.args.dataset_list.index(dataset))
+
             data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
         else:
             # Else use the 'dataset' arg by default for backwards compatibility
