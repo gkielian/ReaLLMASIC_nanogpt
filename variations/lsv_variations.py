@@ -115,14 +115,59 @@ class LinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
 
         return x
 
-class OneHotMLPLSV(LSVBase):
+class MixtureOfLSV(LSVBase):
+    """ A FIRE Inspired method for combining LSVs with a learned router. """
+    def __init__(self, config):
+        # Initialize the base class
+        super().__init__(config)
+
+        # MLP configuration
+        mlp_width = 64
+        self.mlps = nn.ModuleList()
+
+        # Create a tensor containing the constant input "1"
+        self.constant_input = torch.tensor([[1.0]], device=self.device)
+
+        # Create an MLP for each index
+        for _ in range(self.lsv_dataset_num):
+            mlp_layers = []
+            mlp_layers.append(nn.Linear(config.n_embd, mlp_width))
+            mlp_layers.append(nn.ReLU())
+            mlp_layers.append(nn.Linear(mlp_width, mlp_width))
+            mlp_layers.append(nn.ReLU())
+            mlp_layers.append(nn.Linear(mlp_width, config.n_embd))  # Output is embedding dimension size
+            self.mlps.append(nn.Sequential(*mlp_layers).to(self.device))
+
+        # Define the learned router, which will output a probability distribution over MLPs
+        self.router = nn.Sequential(
+            nn.Linear(config.n_embd, self.lsv_dataset_num),
+            nn.Softmax(dim=-1)  # Output a probability distribution
+        )
+
+    def forward(self, x):
+        # Get the router's output: a probability distribution over the MLPs
+        router_probs = self.router(x)
+
+        # Compute the output as a weighted sum of MLP outputs
+        combined_output = torch.zeros_like(x, device=self.device)
+        for i, mlp in enumerate(self.mlps):
+            mlp_output = mlp(x)  # Pass x through the MLP
+            combined_output += router_probs[:, i].unsqueeze(-1) * mlp_output  # Weight the output by the router's probability
+
+        # Combine the MLP output with x (here we just add them)
+        x = x + combined_output
+
+        return x
+
+
+class OneHotMLPLSV_Manual(LSVBase):
     """ A FIRE Inspired method for combining LSVs """
     def __init__(self, config):
         # Initialize the base class
         super().__init__(config)
 
         # Create multiple MLPs, one for each index
-        mlp_width = 32
+        mlp_width = 64
         self.mlps = nn.ModuleList()
 
         # Create a tensor containing the constant input "1"
@@ -220,5 +265,6 @@ lsv_dictionary = {
     "one_hot": OneHotLSV,
     "linear_comb": LinearCombinationLSV,
     "one_hot_mlp": OneHotMLPLSV,
+    "molsv": OneHotMLPLSV,
     "avg_linear_comb": RunningAverageLinearCombinationLSV,
 }
