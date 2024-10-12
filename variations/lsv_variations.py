@@ -125,9 +125,6 @@ class MixtureOfLSV(LSVBase):
         mlp_width = 64
         self.mlps = nn.ModuleList()
 
-        # Create a tensor containing the constant input "1"
-        self.constant_input = torch.tensor([[1.0]], device=self.device)
-
         # Create an MLP for each index
         for _ in range(self.lsv_dataset_num):
             mlp_layers = []
@@ -160,7 +157,7 @@ class MixtureOfLSV(LSVBase):
         return x
 
 
-class OneHotMLPLSV_Manual(LSVBase):
+class OneHotMLPLSV(LSVBase):
     """ A FIRE Inspired method for combining LSVs """
     def __init__(self, config):
         # Initialize the base class
@@ -265,6 +262,6 @@ lsv_dictionary = {
     "one_hot": OneHotLSV,
     "linear_comb": LinearCombinationLSV,
     "one_hot_mlp": OneHotMLPLSV,
-    "molsv": OneHotMLPLSV,
+    "molsv": MixtureOfLSV,
     "avg_linear_comb": RunningAverageLinearCombinationLSV,
 }
