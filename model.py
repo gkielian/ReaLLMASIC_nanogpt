@@ -800,10 +800,17 @@ class GPT(nn.Module):
         return logits, loss
 
     def set_lsv_scaling_factor(self, factor):
-        self.config.apply_vector_scaling_factor = factor
+        self.lsv_matrix.update_lsv_scaling_factor(factor)
+
+    def set_lsv_mode(self, mode):
+        self.lsv_matrix.set_mode(mode)
+
+    def set_lsv_mixture(self, mixture):
+        """ Mixture is a list, allowing for mixing steering vectors """
+        self.lsv_matrix.set_mixture(mixture)
 
     def get_lsv_scaling_factor(self):
-        return self.config.apply_vector_scaling_factor
+        return self.lsv_matrix.get_lsv_scaling_factor()
 
     def set_lsv_index(self, index):
         self.lsv_matrix.update_lsv_index(index)

@@ -22,6 +22,8 @@ class LSVBase(nn.Module):
         self.lsv_dataset_num = config.lsv_dataset_num
         self.lsv_embd_dim = config.n_embd
         self.lsv_scaling_factor = 1.0
+        self.mode = 1
+        self.mixture = []
 
     def update_lsv_scaling_factor(self, new_scaling_factor):
         self.lsv_scaling_factor = new_scaling_factor
@@ -36,7 +38,15 @@ class LSVBase(nn.Module):
 
     def set_mixture(self, mixture_list):
         """ for variation to override """
+        self.mixture = mixture_list
         pass
+
+    def set_mode(self, mode):
+        """ Modes, generally:
+        1 = one hot
+        2 = mixture mode (set mixture and forget)
+        """
+        self.mode = mode
 
     def forward(self, x):
         return x
@@ -52,19 +62,11 @@ class OneHotLSV(LSVBase, FreezeNonSelectedMixin):
         self.one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=self.device)
         self.mode = 1
 
-    def set_mode(self, mode):
-        """ modes:
-        1 = one hot
-        2 = mixture mode (set mixture and forget)
-        """
-        self.mode = mode
-
     def set_mixture(self, mixture_list):
         """ mixture of different vectors """
         for i in range(len(mixture_list)):
             self.one_hot_vector[i] = mixture_list[i]
         print("mixture set to:", self.one_hot_vector)
-
 
     def forward(self, x):
         # Freeze all rows that are not selected by the one-hot vector
@@ -247,66 +249,21 @@ class OneHotMLPLSV(LSVBase):
             param.requires_grad = True
 
     def forward(self, x):
-        # Freeze all non-selected MLPs and unfreeze the selected one
-        self.freeze_non_selected_mlps()
 
         # Select the MLP based on the index
-        selected_mlp = self.mlps[self.lsv_index]
-
-        # Pass the constant input through the selected MLP
-        mlp_output = selected_mlp(x)
+        if self.mode == 1:
+            # Freeze all non-selected MLPs and unfreeze the selected one
+            self.freeze_non_selected_mlps()
+            selected_mlp = self.mlps[self.lsv_index]
+            # Pass the constant input through the selected MLP
+            mlp_output = selected_mlp(x)
+        else:
+            mlp_output = 0
+            for i in range(len(self.mlps)):
+                mlp_output += self.mlps[i](x) * self.mixture[i]
 
         # Combine the MLP output with x (you can combine it in different ways, here we just add them)
         x = x + mlp_output
-
-        return x
-
-class RunningAverageLinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
-    def __init__(self, config, ema_alpha=0.00001526):
-        super().__init__(config)
-
-        # Initialize running averages as a buffer
-        self.register_buffer('running_averages', torch.zeros(self.lsv_dataset_num, config.n_embd, device=self.device))
-        self.ema_alpha = ema_alpha  # Smoothing factor for EMA
-
-        # Learnable linear combination matrix
-        self.linear_comb_matrix = nn.Parameter(
-            torch.empty(self.lsv_dataset_num, self.lsv_dataset_num, device=self.device)
-        )
-        torch.nn.init.normal_(self.linear_comb_matrix, mean=0.00, std=0.02)
-
-    def update_running_average(self, x):
-        with torch.no_grad():
-            # Compute the mean across batch and context dimensions
-            batch_context_mean = x.mean(dim=(-2, -3))  # Shape: [n_embd]
-
-            # Update the running average for the selected index using EMA
-            current_average = self.running_averages[self.lsv_index]
-            new_average = self.ema_alpha * batch_context_mean + (1 - self.ema_alpha) * current_average
-
-            # Store the updated average
-            self.running_averages[self.lsv_index] = new_average
-
-    def forward(self, x):
-        # Update the running average for the selected lsv_index
-        self.update_running_average(x)
-
-        # Freeze unused rows of the linear_comb_matrix
-        self.freeze_non_selected_rows(self.linear_comb_matrix, self.lsv_index)
-
-        # Use a local one_hot_vector
-        one_hot_vector = torch.zeros(self.lsv_dataset_num, device=x.device)
-        one_hot_vector[self.lsv_index] = 1.0 * self.lsv_scaling_factor
-
-        # Select the combination weights
-        selected_linear_comb_vector = torch.matmul(one_hot_vector, self.linear_comb_matrix)
-
-        # Perform the linear combination using the running averages
-        combined_vector = torch.matmul(selected_linear_comb_vector, self.running_averages)
-
-        # Expand combined_vector to match the shape of x
-        combined_vector = combined_vector.unsqueeze(0).unsqueeze(0)  # Shape: [1, 1, n_embd]
-        x = x + combined_vector
 
         return x
 
@@ -428,5 +385,4 @@ lsv_dictionary = {
     "ohmm": OneHotMLPLSV_MoE,
     "ohma": OneHotMLPLSV_Attention,
     "mol": MixtureOfLSV,
-    "avg_linear_comb": RunningAverageLinearCombinationLSV,
 }

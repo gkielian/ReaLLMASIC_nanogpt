@@ -54,6 +54,8 @@ def parse_args():
     # Leanred Steering Vector Related
     parser.add_argument('--use_lsv', default=False, action=argparse.BooleanOptionalAction)
     parser.add_argument('--lsv_size',  type=int, default=1, help="Number of vectors to test")
+    parser.add_argument('--lsv_scaling_factor',  type=float, default=None, help="scaling factor")
+    parser.add_argument('--lsv_mixture',  type=float, nargs='+', default=None, help="scaling factor mixture")
 
     parser.add_argument("--eval_only", action=argparse.BooleanOptionalAction, help="Enable evaluation only mode to calculate and print validation loss")
     parser.add_argument("--eval_iters", type=int, default=250, help="iterations for evaluation")
@@ -310,6 +312,13 @@ def main():
                     if args.use_lsv:
                         model.set_lsv_index(k % args.lsv_size)
                         print("vector", k % args.lsv_size)
+                        if args.lsv_scaling_factor is not None:
+                            model.set_lsv_scaling_factor(args.lsv_scaling_factor)
+                        if args.lsv_mixture is not None:
+                            model.set_lsv_mode(2)
+                            model.set_lsv_mixture(args.lsv_mixture)
+                        else:
+                            model.set_lsv_mode(1)
                     x = torch.tensor(start_ids, dtype=torch.long, device=args.device)[None, ...]
                     block_size = args.block_size if args.block_size else model.config.block_size
                     for step in range(args.max_new_tokens):
