@@ -115,6 +115,45 @@ class LinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
 
         return x
 
+class OneHotMLPLSV_Gating(LSVBase):
+    """OneHotMLPLSV with gating mechanism using sigmoid activation."""
+    def __init__(self, config):
+        super().__init__(config)
+        mlp_width = 64
+        self.mlps = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(config.n_embd, mlp_width),
+                nn.ReLU(),
+                nn.Linear(mlp_width, mlp_width),
+                nn.ReLU(),
+                nn.Linear(mlp_width, config.n_embd)
+            ).to(self.device) for _ in range(self.lsv_dataset_num)
+        ])
+
+        # Router produces gating values between 0 and 1 for each MLP
+        self.router = nn.Sequential(
+            nn.Linear(config.n_embd, self.lsv_dataset_num),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        batch_size, seq_length, n_embd = x.size()
+        x_flat = x.view(-1, n_embd)
+
+        # Gating values for each MLP
+        gates = self.router(x_flat)  # [batch_size * seq_length, lsv_dataset_num]
+
+        combined_output = torch.zeros_like(x_flat)
+        for i, mlp in enumerate(self.mlps):
+            mlp_output = mlp(x_flat)
+            gate = gates[:, i].unsqueeze(-1)
+            combined_output += gate * mlp_output
+
+        combined_output = combined_output.view(batch_size, seq_length, n_embd)
+        x = x + combined_output
+        return x
+
+
 class MixtureOfLSV(LSVBase):
     """ A FIRE Inspired method for combining LSVs with a learned router. """
     def __init__(self, config):
@@ -138,18 +177,33 @@ class MixtureOfLSV(LSVBase):
         # Define the learned router, which will output a probability distribution over MLPs
         self.router = nn.Sequential(
             nn.Linear(config.n_embd, self.lsv_dataset_num),
-            nn.Softmax(dim=-1)  # Output a probability distribution
+            nn.Softmax(dim=-1)  # Output a probability distribution over MLPs
         )
 
     def forward(self, x):
+        # x: [batch_size, seq_length, n_embd]
+
+        # Flatten x to merge batch and sequence dimensions for the router and MLPs
+        batch_size, seq_length, n_embd = x.size()
+        x_flat = x.view(-1, n_embd)  # [batch_size * seq_length, n_embd]
+
         # Get the router's output: a probability distribution over the MLPs
-        router_probs = self.router(x)
+        router_probs = self.router(x_flat)  # [batch_size * seq_length, lsv_dataset_num]
 
         # Compute the output as a weighted sum of MLP outputs
-        combined_output = torch.zeros_like(x, device=self.device)
+        combined_output = torch.zeros_like(x_flat, device=self.device)  # [batch_size * seq_length, n_embd]
+
         for i, mlp in enumerate(self.mlps):
-            mlp_output = mlp(x)  # Pass x through the MLP
-            combined_output += router_probs[:, i].unsqueeze(-1) * mlp_output  # Weight the output by the router's probability
+            mlp_output = mlp(x_flat)  # [batch_size * seq_length, n_embd]
+
+            # Get the router probability for the current MLP
+            prob = router_probs[:, i].unsqueeze(-1)  # [batch_size * seq_length, 1]
+
+            # Multiply and accumulate
+            combined_output += prob * mlp_output  # [batch_size * seq_length, n_embd]
+
+        # Reshape combined_output back to [batch_size, seq_length, n_embd]
+        combined_output = combined_output.view(batch_size, seq_length, n_embd)
 
         # Combine the MLP output with x (here we just add them)
         x = x + combined_output
@@ -209,40 +263,38 @@ class OneHotMLPLSV(LSVBase):
 
 class RunningAverageLinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
     def __init__(self, config, ema_alpha=0.00001526):
-        # Initialize the base class
         super().__init__(config)
 
-        # Initialize running averages for each dataset index using EMA
-        self.running_averages = torch.zeros(self.lsv_dataset_num, config.n_embd, device=self.device)
+        # Initialize running averages as a buffer
+        self.register_buffer('running_averages', torch.zeros(self.lsv_dataset_num, config.n_embd, device=self.device))
         self.ema_alpha = ema_alpha  # Smoothing factor for EMA
 
-        # Learnable linear combination matrix (like before)
-        self.linear_comb_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, self.lsv_dataset_num, device=self.device))
+        # Learnable linear combination matrix
+        self.linear_comb_matrix = nn.Parameter(
+            torch.empty(self.lsv_dataset_num, self.lsv_dataset_num, device=self.device)
+        )
         torch.nn.init.normal_(self.linear_comb_matrix, mean=0.00, std=0.02)
 
     def update_running_average(self, x):
-        """
-        Update the EMA running average for the current lsv_index using the input x.
-        x has shape (batch_size, context_length, n_embd), and we compute the mean across batch and context length.
-        """
-        # Compute the mean across all dimensions except the last (-1), i.e., batch and context length dimensions
-        batch_context_mean = x.mean(dim=(-2, -3))  # Averaging across batch and context dimensions
+        with torch.no_grad():
+            # Compute the mean across batch and context dimensions
+            batch_context_mean = x.mean(dim=(-2, -3))  # Shape: [n_embd]
 
-        # Update the running average for the selected index using EMA
-        current_average = self.running_averages[self.lsv_index]
-        new_average = self.ema_alpha * batch_context_mean + (1 - self.ema_alpha) * current_average
+            # Update the running average for the selected index using EMA
+            current_average = self.running_averages[self.lsv_index]
+            new_average = self.ema_alpha * batch_context_mean + (1 - self.ema_alpha) * current_average
 
-        # Store the updated average
-        self.running_averages[self.lsv_index] = new_average
+            # Store the updated average
+            self.running_averages[self.lsv_index] = new_average
 
     def forward(self, x):
         # Update the running average for the selected lsv_index
         self.update_running_average(x)
 
-        # freeze unused rows of the linear_comb matrix
+        # Freeze unused rows of the linear_comb_matrix
         self.freeze_non_selected_rows(self.linear_comb_matrix, self.lsv_index)
 
-        # Use the linear combination method from the previous strategy
+        # Use a local one_hot_vector
         one_hot_vector = torch.zeros(self.lsv_dataset_num, device=x.device)
         one_hot_vector[self.lsv_index] = 1.0 * self.lsv_scaling_factor
 
@@ -252,16 +304,129 @@ class RunningAverageLinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
         # Perform the linear combination using the running averages
         combined_vector = torch.matmul(selected_linear_comb_vector, self.running_averages)
 
-        # Combine the running average linear combination result with x
+        # Expand combined_vector to match the shape of x
+        combined_vector = combined_vector.unsqueeze(0).unsqueeze(0)  # Shape: [1, 1, n_embd]
         x = x + combined_vector
 
         return x
+
+class OneHotMLPLSV_TopK(LSVBase):
+    """OneHotMLPLSV with Top-K selection of MLPs."""
+    def __init__(self, config, k=2):
+        super().__init__(config)
+        self.k = k
+        mlp_width = 64
+        self.mlps = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(config.n_embd, mlp_width),
+                nn.ReLU(),
+                nn.Linear(mlp_width, config.n_embd)
+            ).to(self.device) for _ in range(self.lsv_dataset_num)
+        ])
+
+        self.router = nn.Linear(config.n_embd, self.lsv_dataset_num)
+
+    def forward(self, x):
+        batch_size, seq_length, n_embd = x.size()
+        x_flat = x.view(-1, n_embd)
+
+        router_logits = self.router(x_flat)
+        topk_values, topk_indices = torch.topk(router_logits, self.k, dim=-1)
+        mask = torch.zeros_like(router_logits)
+        mask.scatter_(1, topk_indices, 1.0)
+
+        # Use straight-through estimator
+        gates = (mask - router_logits.detach()) + router_logits
+
+        combined_output = torch.zeros_like(x_flat)
+        for i, mlp in enumerate(self.mlps):
+            gate = gates[:, i].unsqueeze(-1)
+            if gate.abs().sum() > 0:
+                mlp_output = mlp(x_flat)
+                combined_output += gate * mlp_output
+
+        combined_output = combined_output.view(batch_size, seq_length, n_embd)
+        x = x + combined_output
+        return x
+
+class OneHotMLPLSV_MoE(LSVBase):
+    """OneHotMLPLSV using Mixture of Experts with learned routing."""
+    def __init__(self, config, router_temperature=1.0):
+        super().__init__(config)
+        self.router_temperature = router_temperature
+        mlp_width = 64
+        self.mlps = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(config.n_embd, mlp_width),
+                nn.ReLU(),
+                nn.Linear(mlp_width, config.n_embd)
+            ).to(self.device) for _ in range(self.lsv_dataset_num)
+        ])
+
+        self.router = nn.Linear(config.n_embd, self.lsv_dataset_num)
+
+    def forward(self, x):
+        batch_size, seq_length, n_embd = x.size()
+        x_flat = x.view(-1, n_embd)
+
+        router_logits = self.router(x_flat) / self.router_temperature
+        router_probs = nn.functional.softmax(router_logits, dim=-1)
+
+        combined_output = torch.zeros_like(x_flat)
+        for i, mlp in enumerate(self.mlps):
+            mlp_output = mlp(x_flat)
+            prob = router_probs[:, i].unsqueeze(-1)
+            combined_output += prob * mlp_output
+
+        combined_output = combined_output.view(batch_size, seq_length, n_embd)
+        x = x + combined_output
+        return x
+
+class OneHotMLPLSV_Attention(LSVBase):
+    """OneHotMLPLSV with attention-based routing."""
+    def __init__(self, config):
+        super().__init__(config)
+        mlp_width = 64
+        self.lsv_dataset_num = config.lsv_dataset_num
+        self.mlps = nn.ModuleList([
+            nn.Sequential(
+                nn.Linear(config.n_embd, mlp_width),
+                nn.ReLU(),
+                nn.Linear(mlp_width, config.n_embd)
+            ).to(self.device) for _ in range(self.lsv_dataset_num)
+        ])
+
+        # Learnable queries
+        self.queries = nn.Parameter(torch.randn(self.lsv_dataset_num, config.n_embd))
+
+    def forward(self, x):
+        batch_size, seq_length, n_embd = x.size()
+        x_flat = x.view(-1, n_embd)
+
+        # Compute attention scores
+        attention_scores = torch.matmul(x_flat, self.queries.t())
+        router_probs = nn.functional.softmax(attention_scores, dim=-1)
+
+        combined_output = torch.zeros_like(x_flat)
+        for i, mlp in enumerate(self.mlps):
+            mlp_output = mlp(x_flat)
+            prob = router_probs[:, i].unsqueeze(-1)
+            combined_output += prob * mlp_output
+
+        combined_output = combined_output.view(batch_size, seq_length, n_embd)
+        x = x + combined_output
+        return x
+
 
 
 lsv_dictionary = {
     "one_hot": OneHotLSV,
     "linear_comb": LinearCombinationLSV,
     "one_hot_mlp": OneHotMLPLSV,
-    "molsv": MixtureOfLSV,
+    "ohmg": OneHotMLPLSV_Gating,
+    "ohmt": OneHotMLPLSV_TopK,
+    "ohmm": OneHotMLPLSV_MoE,
+    "ohma": OneHotMLPLSV_Attention,
+    "mol": MixtureOfLSV,
     "avg_linear_comb": RunningAverageLinearCombinationLSV,
 }

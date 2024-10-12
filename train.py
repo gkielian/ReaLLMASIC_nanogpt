@@ -130,6 +130,13 @@ def parse_args():
             "one_hot",
             "linear_comb",
             "one_hot_mlp",
+            "ohmg",
+            "ohmt",
+            "ohmm",
+            "ohma",
+            "ohmgu",
+            "ohmh",
+            "mol",
             "avg_linear_comb",
         ]
     model_group.add_argument("--use_lsv", default=False, action=argparse.BooleanOptionalAction, help="whether to use Learned Steering Vectors")
