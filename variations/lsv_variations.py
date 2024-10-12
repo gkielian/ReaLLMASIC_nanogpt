@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 
@@ -26,9 +25,18 @@ class LSVBase(nn.Module):
 
     def update_lsv_scaling_factor(self, new_scaling_factor):
         self.lsv_scaling_factor = new_scaling_factor
+        # print("set scaling factor to:", self.lsv_scaling_factor)
+
+    def get_lsv_scaling_factor(self):
+        return self.lsv_scaling_factor
 
     def update_lsv_index(self, new_index):
         self.lsv_index = new_index
+        # print("new index", self.lsv_index)
+
+    def set_mixture(self, mixture_list):
+        """ for variation to override """
+        pass
 
     def forward(self, x):
         return x
@@ -42,14 +50,30 @@ class OneHotLSV(LSVBase, FreezeNonSelectedMixin):
         self.lsv_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, config.n_embd, device=self.device))
         torch.nn.init.normal_(self.lsv_matrix, mean=0.00, std=0.02)
         self.one_hot_vector = torch.zeros(self.lsv_matrix.size(0), device=self.device)
+        self.mode = 1
+
+    def set_mode(self, mode):
+        """ modes:
+        1 = one hot
+        2 = mixture mode (set mixture and forget)
+        """
+        self.mode = mode
+
+    def set_mixture(self, mixture_list):
+        """ mixture of different vectors """
+        for i in range(len(mixture_list)):
+            self.one_hot_vector[i] = mixture_list[i]
+        print("mixture set to:", self.one_hot_vector)
+
 
     def forward(self, x):
         # Freeze all rows that are not selected by the one-hot vector
         self.freeze_non_selected_rows(self.lsv_matrix, self.lsv_index)
 
         # Create a one-hot vector for the dataset index
-        self.one_hot_vector.zero_()  # Reset the one-hot vector
-        self.one_hot_vector[self.lsv_index] = 1.0 * self.lsv_scaling_factor
+        if self.mode == 1:
+            self.one_hot_vector.zero_()  # Reset the one-hot vector
+            self.one_hot_vector[self.lsv_index] = 1.0 * self.lsv_scaling_factor
 
         # Multiply the one-hot vector by the learned parameter matrix to get the selected vector
         selected_vector = torch.matmul(self.one_hot_vector, self.lsv_matrix)
@@ -71,9 +95,6 @@ class LinearCombinationLSV(LSVBase, FreezeNonSelectedMixin):
         # Learnable linear combination vector
         self.linear_comb_matrix = nn.Parameter(torch.empty(self.lsv_dataset_num, self.lsv_dataset_num, device=self.device))
         torch.nn.init.normal_(self.linear_comb_matrix, mean=0.00, std=0.02)
-
-        # One hot for selecting linear_combination
-        self.one_hot_vector = torch.zeros(self.lsv_dataset_num, device=self.device)
 
     def forward(self, x):
 
