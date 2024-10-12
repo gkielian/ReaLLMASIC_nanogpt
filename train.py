@@ -11,6 +11,7 @@ import sys
 import time
 
 from model_info_util.model_info import print_summary, print_module_structure, print_model_blocks, print_model_tree
+from monitoring_util.gpu_monitoring import get_gpu_memory_info
 
 from rich.progress import Progress
 
@@ -689,6 +690,7 @@ class Trainer:
         else:
             raise FileNotFoundError(f"Meta file not found at {meta_path}")
 
+    @torch.no_grad()
     def sample_and_print(self, max_sample_tokens, start_tokens="\n"):
         # Do one iteration per lsv, default to one with no lsv
         sample_iterations = 1
@@ -1092,7 +1094,7 @@ class Trainer:
 
                 if self.iter_num % self.args.eval_interval == 0 and self.master_process:
                     losses = self.estimate_loss()
-                    vram_allocated = torch.cuda.memory_allocated() / (1024 ** 2)  # Convert to MB
+                    vram_allocated = get_gpu_memory_info(info_type='used')
                     if self.args.dataset_list is not None:
                         # Print loss for each dataset if multiple datasets are used
                         for dataset, dataset_losses in losses['datasets'].items():
@@ -1221,7 +1223,7 @@ class Trainer:
                             torch.save(checkpoint, os.path.join(self.args.out_dir, 'ckpt.pt'))
                         sys.exit("Exiting training loss is NaN")
 
-                    vram_allocated = torch.cuda.memory_allocated() / (1024 ** 2)  # Convert to MB
+                    vram_allocated = get_gpu_memory_info(info_type='used')
                     self.log_metrics_non_validation(lossf, running_mfu, vram_allocated, self.iter_num)
 
 
