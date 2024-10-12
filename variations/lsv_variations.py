@@ -130,7 +130,7 @@ class OneHotMLPLSV(LSVBase):
 
         for _ in range(self.lsv_dataset_num):
             mlp_layers = []
-            mlp_layers.append(nn.Linear(1, mlp_width))
+            mlp_layers.append(nn.Linear(config.n_embd, mlp_width))
             mlp_layers.append(nn.ReLU())
             mlp_layers.append(nn.Linear(mlp_width, mlp_width))
             mlp_layers.append(nn.ReLU())
@@ -158,9 +158,6 @@ class OneHotMLPLSV(LSVBase):
         selected_mlp = self.mlps[self.lsv_index]
 
         # Pass the constant input through the selected MLP
-        mlp_output = selected_mlp(self.constant_input)
-
-        # Compute the result of the selected MLP
         mlp_output = selected_mlp(x)
 
         # Combine the MLP output with x (you can combine it in different ways, here we just add them)
