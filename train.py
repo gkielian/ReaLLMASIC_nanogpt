@@ -90,6 +90,7 @@ def parse_args():
     training_group.add_argument('--dataset_list', default=None, nargs='+', type=str, help="If not None, training will be done from a list of datasets to train on, e.g. --dataset_list shakespeare wikitext103 openwebtext")
     training_group.add_argument('--dataset_interleaving', default=False, action=argparse.BooleanOptionalAction)
     training_group.add_argument('--dataset_interleaving_shuffle', default=False, action=argparse.BooleanOptionalAction)
+    training_group.add_argument('--dataset_sampling_learning_rate', default=None, nargs='+', type=float, help="Sampling learning rates for each dataset in dataset_list.")
     training_group.add_argument('--dataset_sampling_probs', default=None, nargs='+', type=float, help="Sampling proportions for each dataset in dataset_list. Probabilities normally but proportions in dataset_interleaving")
     training_group.add_argument('--dataset_sampling_probs_final', default=None, nargs='+', type=float, help="If, set final sampling probabilities for each dataset in dataset_list.")
     training_group.add_argument('--dataset_sampling_probs_transition_method', default=None, type=str, choices=["linear", "cosine", "exponential"])
@@ -883,6 +884,12 @@ class Trainer:
                 self.model.set_lsv_index(self.args.dataset_list.index(dataset))
 
             data = self.train_data_dict[dataset] if split == 'train' else self.val_data_dict[dataset]
+
+            # set learning rate
+            if self.args.dataset_sampling_learning_rate:
+                dataset_index = self.args.dataset_list.index(dataset)
+                self.args.learning_rate = self.args.dataset_sampling_learning_rate[dataset_index]
+
         else:
             # Else use the 'dataset' arg by default for backwards compatibility
             dataset = self.args.dataset
