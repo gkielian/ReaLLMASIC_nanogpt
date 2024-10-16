@@ -837,10 +837,6 @@ class GPT(nn.Module):
         # Multiply the one-hot vector by the learned parameter matrix
         selected_vector = torch.matmul(one_hot_vector, self.lsv_matrix)
 
-        # print(self.lsv_matrix.size())
-        # print(selected_vector.size())
-        # Add the selected parameter vector to the output
-        # print(x.size())
         x = x + selected_vector
 
         return x
