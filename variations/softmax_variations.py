@@ -1,4 +1,3 @@
-
 import torch
 import torch.nn as nn
 import math
@@ -18,14 +17,17 @@ class Softermax(nn.Module):
         e_x = torch.pow(2.0, x)
         return e_x / e_x.sum(dim=self.dim, keepdim=True)
 
+
 # Softmax variation with learnable constant parameters for xmax and denominator
 class ConSmax(nn.Module):
     """ Constant learnable parameters for xmax and denominator """
     def __init__(self, config, dim=-1):
         super().__init__()
-
-        # Input and Output Logging
+        self.dim = dim
         self.softmax_io_logging = config.softmax_io_logging
+        self.softmax_io_log_interval = config.softmax_io_log_interval
+        self.iter_num = 0
+
         if self.softmax_io_logging:
             self.inputs = []
             self.outputs = []
@@ -38,61 +40,43 @@ class ConSmax(nn.Module):
 
         # Set the base of the exponent
         if config.consmax_use_euler_base:
-          self.consmax_base = math.e
+            self.consmax_base = math.e
         else:
-          self.consmax_base = config.consmax_base
+            self.consmax_base = config.consmax_base
 
     def forward(self, x):
         x_adj = x - self.beta
         e_x = torch.pow(self.consmax_base, x_adj)
         result = e_x / self.gamma
 
-        if self.softmax_io_logging:
+        if self.training and self.softmax_io_logging and self.iter_num % self.softmax_io_log_interval == 0:
             self.inputs = x
             self.outputs = result
 
+        if self.training:
+            self.iter_num += 1
+
         return result
 
+
+# Softmax variation with per-head learnable constant parameters for xmax and denominator
 class ConSmaxV2(nn.Module):
     """ Constant learnable parameters for xmax and denominator """
     def __init__(self, config, dim=-1):
         super().__init__()
-
-        # Number of attention heads
         self.n_head = config.n_head
-
-        # Input and Output Logging
         self.softmax_io_logging = config.softmax_io_logging
+        self.softmax_io_log_interval = config.softmax_io_log_interval
+        self.iter_num = 0
+
         if self.softmax_io_logging:
             self.inputs = []
             self.outputs = []
 
-        # Learnable Factors vs Directly Learnable Parameters
-        if config.consmax_learnable_factors:
-            if config.consmax_per_head:
-                # per head learnable factors
-                self.beta_factor = nn.Parameter(torch.ones(self.n_head, 1))
-                self.gamma_factor = nn.Parameter(torch.ones(self.n_head, 1))
-            else:
-                # if not using per head
-                self.beta_factor = nn.Parameter(torch.ones(torch.ones(1)))
-                self.gamma_factor = nn.Parameters(torch.ones(torch.ones(1)))
-        else:
-            if config.consmax_per_head:
-                # per head learnable factors
-                self.beta_factor = torch.ones(self.n_head,1)
-                self.gamma_factor = torch.ones(self.n_head,1)
-            else:
-                # if not using per head
-                self.beta_factor = torch.ones(torch.ones(1))
-                self.gamma_factor = torch.ones(torch.ones(1))
-
-        if config.consmax_learnable_init:
-            self.beta_init = nn.Parameter(torch.Tensor([config.consmax_initial_beta]))
-            self.gamma_init = nn.Parameter(torch.Tensor([config.consmax_initial_gamma]))
-        else:
-            self.beta_init = config.consmax_initial_beta
-            self.gamma_init = config.consmax_initial_gamma
+        self.beta_init = config.consmax_initial_beta
+        self.gamma_init = config.consmax_initial_gamma
+        self.beta_factor = nn.Parameter(torch.ones(self.n_head, 1, 1))
+        self.gamma_factor = nn.Parameter(torch.ones(self.n_head, 1, 1))
 
         # Set beta and gamma as fields for backwards compatibility
         self.beta = self.beta_init * self.beta_factor
@@ -105,16 +89,19 @@ class ConSmaxV2(nn.Module):
             self.consmax_base = config.consmax_base
 
     def forward(self, x):
-        self.beta = self.beta_init * self.beta_factor
-        self.gamma = self.beta_init * self.gamma_factor
+        self.beta = self.beta_factor * self.beta_init
+        self.gamma = self.gamma_factor * self.gamma_init
 
         x_adj = x - self.beta
         e_x = torch.pow(self.consmax_base, x_adj)
         result = e_x / self.gamma
 
-        if self.softmax_io_logging:
+        if self.training and self.softmax_io_logging and self.iter_num % self.softmax_io_log_interval == 0:
             self.inputs = x
             self.outputs = result
+
+        if self.training:
+            self.iter_num += 1
 
         return result
 
@@ -147,16 +134,17 @@ class const_quan(torch.autograd.Function):
 
 _const_quan=const_quan.apply
 
+# Softmax variation with quantized xmax and denominator
 class ConSmaxQuan(nn.Module):
-    """ Base-e Softmax with option to remove max subtraction"""
+    """ Quantized version with learnable beta and gamma """
     def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
+        self.softmax_io_logging = config.softmax_io_logging
+        self.softmax_io_log_interval = config.softmax_io_log_interval
+        self.iter_num = 0
 
-        # demonimator - gamma
         self.gamma = nn.Parameter(torch.Tensor([config.consmax_initial_gamma]))
-
-        # learnable 'xmax' - beta
         self.beta = nn.Parameter(torch.Tensor([config.consmax_initial_beta]))
 
         self.fake_beta = None
@@ -164,42 +152,71 @@ class ConSmaxQuan(nn.Module):
 
     def forward(self, x):
         if self.training:
-            #print('fake_beta:', self.fake_beta)
-            #print('fake_gamma:', self.fake_gamma)
-            self.fake_beta, self.fake_gamma=_const_quan(self.beta, self.gamma)
+            self.fake_beta, self.fake_gamma = _const_quan(self.beta, self.gamma)
             x = x - self.fake_beta
             e_x = torch.exp(x)
-            return e_x / self.fake_gamma
+            result = e_x / self.fake_gamma
         else:
-            scale_beta=100 #scaling factor for quantization, should make it as parameter
-            scale_gamma=10
-            x = x - dequantize(quantize(self.beta,scale_beta), scale_beta)
+            scale_beta = 100
+            scale_gamma = 10
+            x = x - dequantize(quantize(self.beta, scale_beta), scale_beta)
             e_x = torch.exp(x)
-            return e_x/dequantize(quantize(self.gamma,scale_gamma), scale_gamma)
+            result = e_x / dequantize(quantize(self.gamma, scale_gamma), scale_gamma)
 
-# Like softermax, but parameterized to permit exploration of bases greater than 2
+        if self.training and self.softmax_io_logging and self.iter_num % self.softmax_io_log_interval == 0:
+            self.inputs = x
+            self.outputs = result
+
+        if self.training:
+            self.iter_num += 1
+
+        return result
+
+
+# Like softmax, but parameterized to permit exploration
 class Strongermax(nn.Module):
     """ Softmax with ability to increase to 'stronger' bases """
     def __init__(self, config, dim=-1):
         super().__init__()
         self.dim = dim
+
+        # Strongermax Params
         self.strength = config.strongermax_strength
         self.subtract_max = config.strongermax_use_xmax
+        self.xmax_guess = config.strongermax_xmax_guess
         self.sum_to_1 = config.strongermax_sum_to_1
         self.divisor = config.strongermax_divisor
+        self.div_by_seq_len = config.div_by_seq_len
+        self.overflow_recompute = config.strongermax_overflow_recompute
+        self.softmax_io_log_interval = config.softmax_io_log_interval
+        self.iter_num = 0
+
+        if self.overflow_recompute:
+            assert self.xmax_guess is not None, "for overflow recompute, xmax_guess must be set"
+
         # Input and Output Logging
         self.softmax_io_logging = config.softmax_io_logging
-        print(self.softmax_io_logging)
         if self.softmax_io_logging:
             self.inputs = []
             self.outputs = []
-        self.div_by_seq_len = config.div_by_seq_len
 
     def forward(self, x):
         x_adj = None
+
         if self.subtract_max:
+            # Guessing correctly instead of subtracting real max can save a pass
+            # else we use real xmax
             max_x = x.max(dim=self.dim, keepdim=True).values
-            x_adj = x - max_x
+            if self.overflow_recompute:
+                if (torch.max(x - self.xmax_guess)) > 88:
+                    x_adj = x - max_x
+                else:
+                    x_adj = x - self.xmax_guess
+            else:
+                if self.xmax_guess:
+                    x_adj = x - self.xmax_guess
+                else:
+                    x_adj = x - max_x
         else:
             x_adj = x
 
@@ -214,9 +231,12 @@ class Strongermax(nn.Module):
 
         result = result / self.divisor
 
-        if self.softmax_io_logging:
+        if self.training and self.softmax_io_logging and self.iter_num % self.softmax_io_log_interval == 0:
             self.inputs = x
             self.outputs = result
+
+        if self.training:
+            self.iter_num += 1
 
         return result
 
@@ -237,8 +257,11 @@ class Polymax(nn.Module):
 
         self.power = config.polymax_power
         self.divisor = config.polymax_divisor
-
+        self.div_by_seq_len = config.div_by_seq_len
         self.softmax_io_logging = config.softmax_io_logging
+        self.softmax_io_log_interval = config.softmax_io_log_interval
+        self.iter_num = 0
+
         if self.softmax_io_logging:
             self.inputs = []
             self.outputs = []
@@ -265,9 +288,12 @@ class Polymax(nn.Module):
             seq_len = x.shape[self.dim]
             result = result / seq_len
 
-        if self.softmax_io_logging:
+        if self.training and self.softmax_io_logging and self.iter_num % self.softmax_io_log_interval == 0:
             self.inputs = x
             self.outputs = result
+
+        if self.training:
+            self.iter_num += 1
 
         return result
 
@@ -452,6 +478,25 @@ class SigSoftmax(nn.Module):
 
         return numerator / denominator
 
+class SigmoidMax(nn.Module):
+    def __init__(self, config, dim=-1):
+        super().__init__()
+        self.dim = dim
+        self.sigmoid = nn.Sigmoid()
+        self.sigmoidmax_divisor = config.sigmoidmax_divisor
+        self.div_by_seq_len = config.div_by_seq_len
+
+    def forward(self, x):
+
+        result = self.sigmoid(x) / self.sigmoidmax_divisor
+
+        # divide by sequence length
+        if self.div_by_seq_len:
+            seq_len = x.shape[self.dim]
+            result = result / seq_len
+
+        return result
+
 class ReLUMax(nn.Module):
     def __init__(self, config, dim=-1):
         super().__init__()
@@ -527,6 +572,7 @@ softmax_dictionary = {
     "strongermax": Strongermax,
     "sigsoftmax": SigSoftmax,
     "relumax": ReLUMax,
+    "sigmoidmax": SigmoidMax,
     "softplus": Softplus,
     "squareplus": Squareplus,
 }

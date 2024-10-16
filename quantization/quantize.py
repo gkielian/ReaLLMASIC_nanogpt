@@ -8,7 +8,7 @@ def set_dtype(bits):
     else:
         return torch.int8
     
-def symmetric_quantize(tensor, bits):
+def symmetric_quantize(tensor, bits, causal_mask=False):
     """
     Symmetric quantization function
     :param tensor: Tensor to be quantized
@@ -17,24 +17,18 @@ def symmetric_quantize(tensor, bits):
     """
     bit_max = (1 << (bits - 1)) - 1
     bit_min = -bit_max - 1
-    abs_max = tensor.abs().max()
-    scale = abs_max / bit_max
-    xi_array = torch.round(tensor / scale)
-    return 0, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
+    if causal_mask:
+        # Apply torch.tril to get the lower triangular part (including diagonal)
+        lower_triangular = torch.tril(tensor)
 
-def symmetric_quantize(tensor, bits):
-    """
-    Symmetric quantization function
-    :param tensor: Tensor to be quantized
-    :param bits: Number of bits of quantization
-    :return: zero point, scale, quantized tensor
-    """
-    bit_max = (1 << (bits - 1)) - 1
-    bit_min = -bit_max - 1
-    abs_max = tensor.abs().max()
+        # Find the maximum value
+        abs_max = lower_triangular.abs().max()
+    else:
+        abs_max = tensor.abs().max()
     scale = abs_max / bit_max
     xi_array = torch.round(tensor / scale)
-    return 0, scale, torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
+    clamped_array = torch.clamp(xi_array, min=bit_min, max=bit_max).to(dtype=set_dtype(bits))
+    return 0, scale, clamped_array
 
 def affine_quantize(tensor, bits):
     """
@@ -99,7 +93,7 @@ def stochastic_quantize(tensor, bits):
 
     return 0, norm, sign_xi_array
 
-def dequantize(zero_point, scale, tensor):
+def dequantize(zero_point, scale, tensor, causal_mask=False):
     """
     Dequantize the quantizated tensor
     :param zero_point: zero point of tensor
@@ -107,14 +101,21 @@ def dequantize(zero_point, scale, tensor):
     :param tensor: quantized tensor
     :return: Dequantized weights
     """
-    return (tensor - zero_point) * scale
+    dequantized = (tensor - zero_point) * scale
+    if causal_mask:
+        # Create a mask for the upper triangular part
+        upper_tri_mask = torch.triu(torch.ones_like(dequantized), diagonal=1).bool()
 
-def fake_quantize_act(obj, activation, tensor, num_bits, quant_method):
-    zero_point, scale, act = quantize_dictionary[quant_method](tensor, num_bits)
+        # Set the upper triangular part to -inf
+        dequantized[upper_tri_mask] = -float('inf')
+    return dequantized
+
+def fake_quantize_act(obj, activation, tensor, num_bits, quant_method, causal_mask=False):
+    zero_point, scale, act = quantize_dictionary[quant_method](tensor, num_bits, causal_mask=causal_mask)
     setattr(obj, activation, act)
     setattr(obj, f"{activation}_scale", scale)
     setattr(obj, f"{activation}_zero_point", zero_point)
-    return dequantize(zero_point, scale, act)
+    return dequantize(zero_point, scale, act, causal_mask=causal_mask)
 
 class FakeLinearQuantizationFunction(torch.autograd.Function):
     """Simulates error caused by quantization. Uses Straight-Through Estimator for Back prop
