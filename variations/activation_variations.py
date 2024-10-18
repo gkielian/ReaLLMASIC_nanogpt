@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-
 # Custom Activation Variations
 class SquaredReLU(nn.Module):
     def __init__(self):
@@ -86,6 +85,87 @@ class PiecewiseFullyLearnableActivation(nn.Module):
 
         return result
 
+
+class LearnedSplineActivation(nn.Module):
+    def __init__(self, num_knots=10, init_x_range=(-2, 2)):
+        super().__init__()
+        self.num_knots = num_knots
+
+        # Initialize learnable x_vals and y_vals
+        x_init = torch.linspace(init_x_range[0], init_x_range[1], num_knots)
+        y_init = gelu(x_init)
+
+        self.x_vals = nn.Parameter(x_init)
+        self.y_vals = nn.Parameter(y_init)
+
+    def forward(self, x):
+        # Compute spline coefficients
+        coeffs = self._compute_spline_coefficients(x_vals, y_vals)
+
+        # Evaluate spline at input x
+        result = self._evaluate_spline(x, x_vals_unique, coeffs)
+        return result
+
+    def _compute_spline_coefficients(self, x_vals, y_vals):
+        """
+        Compute the coefficients for cubic spline interpolation.
+        """
+        n = x_vals.size(0)
+        h = x_vals[1:] - x_vals[:-1]  # Intervals between x knots
+
+        # Set up the system of equations
+        # Compute the differences in y_vals
+        delta = (y_vals[1:] - y_vals[:-1]) / h
+
+        # Construct the tridiagonal matrix
+        A = torch.zeros(n, n, device=x_vals.device)
+        rhs = torch.zeros(n, device=x_vals.device)
+
+        A[0, 0] = 1  # Natural spline boundary condition
+        A[-1, -1] = 1  # Natural spline boundary condition
+
+        for i in range(1, n - 1):
+            A[i, i - 1] = h[i - 1]
+            A[i, i] = 2 * (h[i - 1] + h[i])
+            A[i, i + 1] = h[i]
+            rhs[i] = 3 * (delta[i] - delta[i - 1])
+
+        # Solve for the second derivatives (M)
+        M = torch.linalg.solve(A, rhs)
+
+        # Compute spline coefficients for each interval
+        coeffs = []
+        for i in range(n - 1):
+            h_i = h[i]
+            a = y_vals[i]
+            b = delta[i] - h_i * (2 * M[i] + M[i + 1]) / 3
+            c = M[i] / 2
+            d = (M[i + 1] - M[i]) / (6 * h_i)
+            coeffs.append((a, b, c, d))
+
+        # Stack coefficients for vectorized computation
+        coeffs = tuple(torch.stack(c) for c in zip(*coeffs))
+        return coeffs
+
+    def _evaluate_spline(self, x, x_vals, coeffs):
+        """
+        Evaluate the spline at the input x using the computed coefficients.
+        """
+        a, b, c, d = coeffs  # Unpack coefficients
+        n = x_vals.size(0)
+
+        # Find the interval each x belongs to
+        indices = torch.searchsorted(x_vals, x) - 1
+        indices = torch.clamp(indices, 0, n - 2)
+
+        x_k = x_vals[indices]
+        dx = x - x_k
+
+        # Compute the spline value
+        result = a[indices] + b[indices] * dx + c[indices] * dx**2 + d[indices] * dx**3
+        return result
+
+
 activation_dictionary = {
     "celu": nn.CELU(),
     "elu": nn.ELU(),
@@ -95,6 +175,7 @@ activation_dictionary = {
     "mish": nn.Mish(),
     "piecewise": PiecewiseLearnableActivation(),
     "pfla": PiecewiseFullyLearnableActivation(),
+    "learned_spline": LearnedSplineActivation(),
     "prelu": nn.PReLU(),
     "relu": nn.ReLU(),
     "relu6": nn.ReLU6(),

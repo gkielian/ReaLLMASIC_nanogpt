@@ -179,6 +179,7 @@ def parse_args():
             "gelu",
             "glu",
             "leaky_relu",
+            "learned_spline",
             "mish",
             "piecewise",
             "pfla",
