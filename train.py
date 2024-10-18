@@ -181,6 +181,7 @@ def parse_args():
             "leaky_relu",
             "mish",
             "piecewise",
+            "pfla",
             "prelu",
             "relu",
             "relu6",
