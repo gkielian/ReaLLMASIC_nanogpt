@@ -93,6 +93,7 @@ class LearnedSplineActivation(nn.Module):
 
         # Initialize learnable x_vals and y_vals
         x_init = torch.linspace(init_x_range[0], init_x_range[1], num_knots)
+        gelu = nn.GELU()
         y_init = gelu(x_init)
 
         self.x_vals = nn.Parameter(x_init)
