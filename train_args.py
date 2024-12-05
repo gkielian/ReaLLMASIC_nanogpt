@@ -48,6 +48,7 @@ def parse_args():
     training_group.add_argument('--gpt2_type', default='gpt2', type=str)
     training_group.add_argument('--prev_run_ckpt', default='', type=str)
     training_group.add_argument('--csv_ckpt_dir', default='', type=str)
+    training_group.add_argument('--init_from_ckpt', default='ckpt.pt', type=str, help="if save_major_ckpt_interval was set, can use to init from specific ckpts")
 
     # Data args
     training_group.add_argument('--dataset', default='shakespeare_char', type=str)
