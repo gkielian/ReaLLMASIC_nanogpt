@@ -235,6 +235,7 @@ class Strongermax(nn.Module):
 
         # This will allow adding a zero vector along the attention dimension.
         self.add_zero_attn = config.strongermax_add_zero_attn
+        self.original_shape = None
 
     def forward(self, x):
 
@@ -242,7 +243,8 @@ class Strongermax(nn.Module):
 
         # If add_zero_attn is True, add a zero vector along `self.dim`
         if self.add_zero_attn:
-            zeros_shape = list(x.shape)
+            self.original_shape = x.shape
+            zeros_shape = list(self.original_shape)
             zeros_shape[self.dim] = 1
             zero_vec = torch.zeros(zeros_shape, device=x.device, dtype=x.dtype)
             x_adj = torch.cat([x_adj, zero_vec], dim=self.dim)
@@ -279,6 +281,14 @@ class Strongermax(nn.Module):
             result = result / seq_len
 
         result = result / self.divisor
+
+        # If we added zero attention, remove it now to restore original shape
+        # This ensures no dimension mismatch (e.g., going back to original context length)
+        if self.add_zero_attn:
+            # Remove the last "no-op" slot
+            slices = [slice(None)] * len(result.shape)
+            slices[self.dim] = slice(None, self.original_shape[self.dim])
+            result = result[tuple(slices)]
 
         if self.training and self.softmax_io_logging and self.iter_num % self.softmax_io_log_interval == 0:
             self.inputs = x
