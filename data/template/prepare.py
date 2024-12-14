@@ -51,7 +51,7 @@ def parse_arguments():
 
 def save_args(args, out_dir):
     os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, 'args.json'), 'w') as f:
+    with open(os.path.join('./', 'args.json'), 'w') as f:
         json.dump(vars(args), f, indent=4)
 
 def read_and_split_data(args):
@@ -95,7 +95,7 @@ def read_and_split_data(args):
 def save_tokens(ids, output_file, dtype):
     total = len(ids)
     batch_size = 1024 * 1024  # 1 million tokens per batch
-    with open(os.path.join('out', output_file), 'wb') as f_out:
+    with open(os.path.join("./", output_file), 'wb') as f_out:
         for i in tqdm(range(0, total, batch_size), desc=f"Saving {output_file}"):
             batch = ids[i:i+batch_size]
             np.array(batch, dtype=dtype).tofile(f_out)

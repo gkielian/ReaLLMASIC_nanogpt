@@ -339,12 +339,19 @@ class CSVIntegerTokenizer(Tokenizer):
             field_mapping = {}
             for value in range(min_value, max_value + 1):
                 token = f"{value}{prefix}"
-                self.stoi[token] = token_id
-                self.itos[token_id] = token
-                field_mapping[value] = token_id
-                token_id += 1
+                if token not in self.stoi:
+                    self.stoi[token] = token_id
+                    self.itos[token_id] = token
+                    token_id += 1
+                field_mapping[value] = self.stoi[token]
 
             self.field_token_mappings.append(field_mapping)
+
+        # Add newline token
+        self.newline_token = '\n'
+        self.stoi[self.newline_token] = token_id
+        self.itos[token_id] = self.newline_token
+        token_id += 1
 
         self.vocab_size = token_id
 
@@ -359,7 +366,6 @@ class CSVIntegerTokenizer(Tokenizer):
             if len(fields) != self.num_fields:
                 raise ValueError(f"Expected {self.num_fields} fields, but got {len(fields)} in line: {line}")
 
-            line_ids = []
             for i in range(self.num_fields):
                 try:
                     value = int(fields[i])
@@ -369,8 +375,9 @@ class CSVIntegerTokenizer(Tokenizer):
                     raise ValueError(f"Value {value} out of range for field {i} in line: {line}")
 
                 token_id = self.field_token_mappings[i][value]
-                line_ids.append(token_id)
-            ids.extend(line_ids)
+                ids.append(token_id)
+            # Append newline token after each line
+            ids.append(self.stoi[self.newline_token])
 
         # Save the meta data
         meta = {
@@ -381,17 +388,24 @@ class CSVIntegerTokenizer(Tokenizer):
             'field_prefixes': self.field_prefixes,
             'field_min_values': self.field_min_values,
             'field_max_values': self.field_max_values,
+            'newline_token': self.newline_token,
         }
         self.save_meta(meta)
         return ids
 
     def detokenize(self, ids):
         tokens = [self.itos[id] for id in ids]
-        # Group tokens into lines based on the number of fields
         lines = []
-        for i in range(0, len(tokens), self.num_fields):
-            line_tokens = tokens[i:i + self.num_fields]
-            # Remove prefixes and reconstruct the CSV line
-            values = [token.rstrip(self.field_prefixes[j]) for j, token in enumerate(line_tokens)]
-            lines.append(','.join(values))
+        current_line_tokens = []
+        for token in tokens:
+            if token == self.newline_token:
+                # End of line
+                if current_line_tokens:
+                    # Remove prefixes and reconstruct the CSV line
+                    values = [token.rstrip(self.field_prefixes[j]) for j, token in enumerate(current_line_tokens)]
+                    lines.append(','.join(values))
+                    current_line_tokens = []
+            else:
+                current_line_tokens.append(token)
         return '\n'.join(lines)
+
