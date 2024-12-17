@@ -941,8 +941,10 @@ class GPT(nn.Module):
 
             # Intercept for Expanded Layer
             # if self.use_expanded_layer and layer == self.config.apply_expansion_at_layer_idx:
-            if layer == 1:
+            if layer == self.config.big_block_after_layer:
+                # x_prior = x
                 x = self.big_block(x, iter_num)
+                # x = x_prior + x
 
             # Intercept for Learned Steering Vectors
             if self.use_lsv and layer == self.config.apply_lsv_at_layer_idx:
