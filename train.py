@@ -100,7 +100,8 @@ class Trainer:
         # Model settings
         # TODO only add if they are defined from the argparse
         self.model_args = {action.dest: getattr(self.args, action.dest) for action in self.model_group._group_actions}
-        self.model_args['vocab_size'] = None
+        self.model_args['vocab_size_a'] = None
+        self.model_args['vocab_size_b'] = None
         self.model_args['eval_interval'] = self.args.eval_interval
 
         # Training settings
@@ -111,7 +112,8 @@ class Trainer:
             print(self.model_args['lsv_dataset_num'])
 
         if self.args.init_from == 'scratch':
-            self.model_args['vocab_size'] = self.get_vocab_size_from_meta()
+            self.model_args['vocab_size_a'] = self.args.vocab_size_a
+            self.model_args['vocab_size_b'] = self.args.vocab_size_b
 
             # Save full configuration used for training
             config_json = {**self.model_args, **self.training_args}
@@ -351,7 +353,13 @@ class Trainer:
 
     def load_data(self):
 
-        if self.args.dataset_list is None:
+        if self.args.multicontext_training:
+            self.train_data_a = np.memmap(os.path.join('data', self.args.dataset_a, 'train.bin'), dtype=np.uint16, mode='r')
+            self.val_data_a = np.memmap(os.path.join('data', self.args.dataset_a, 'val.bin'), dtype=np.uint16, mode='r')
+
+            self.train_data_b = np.memmap(os.path.join('data', self.args.dataset_b, 'train.bin'), dtype=np.uint16, mode='r')
+            self.val_data_b = np.memmap(os.path.join('data',self.args.dataset_b, 'val.bin'), dtype=np.uint16, mode='r')
+        elif self.args.dataset_list is None:
 
             if self.model_args['vocab_size'] is None:
                 sys.exit("Error: no vocab size specified")
@@ -486,6 +494,28 @@ class Trainer:
                 dataset_index = self.args.dataset_list.index(dataset)
                 self.args.learning_rate = self.args.dataset_sampling_learning_rate[dataset_index]
 
+        elif self.args.dataset_a is not None:
+            if split == 'train':
+                data_a = self.train_data_a
+                data_b = self.train_data_b
+            else:
+                data_a = self.val_data_a
+                data_b = self.val_data_b
+
+            ix_a = torch.randint(len(data_a) - self.args.block_size, (self.args.batch_size,))
+            ix_b = torch.randint(len(data_b) - self.args.block_size, (self.args.batch_size,))
+
+            x_a = torch.stack([torch.from_numpy(data_a[i:i+self.args.block_size].astype(np.int64)) for i in ix_a])
+            y_a = torch.stack([torch.from_numpy(data_a[i+1:i+1+self.args.block_size].astype(np.int64)) for i in ix_a])
+
+            x_b = torch.stack([torch.from_numpy(data_b[i:i+self.args.block_size].astype(np.int64)) for i in ix_b])
+            y_b = torch.stack([torch.from_numpy(data_b[i+1:i+1+self.args.block_size].astype(np.int64)) for i in ix_b])
+
+            x_a, y_a = x_a.pin_memory().to(self.device, non_blocking=True), y_a.pin_memory().to(self.device, non_blocking=True)
+            x_b, y_b = x_b.pin_memory().to(self.device, non_blocking=True), y_b.pin_memory().to(self.device, non_blocking=True)
+
+            return x_a, y_a, x_b, y_b
+
         else:
             # Else use the 'dataset' arg by default for backwards compatibility
             dataset = self.args.dataset
@@ -546,14 +576,25 @@ class Trainer:
             out['train'] = out['datasets'][self.args.dataset]['train']
             print(out['val'])
 
+        elif self.args.multicontext_training:
+            # multicontext training
+            for split in ['train', 'val']:
+                losses = torch.zeros(self.args.eval_iters)
+                for k in range(self.args.eval_iters):
+                    x_a, y_a, x_b, y_b = self.get_batch(split)
+
+                    with self.ctx:
+                        logits_a, logits_b, loss = self.model(x_a, x_b, y_a, y_b, iter_num=self.iter_num)
+                    losses[k] = loss.item()
+                out[split] = losses.mean()
         else:
             # Default behavior for a single dataset
             for split in ['train', 'val']:
                 losses = torch.zeros(self.args.eval_iters)
                 for k in range(self.args.eval_iters):
-                    X, Y = self.get_batch(split)
+                    x_a, y_a, x_b, y_b = self.get_batch(split)
                     with self.ctx:
-                        logits, loss = self.model(X, Y, iter_num=self.iter_num)
+                        logits_a, logits_b, loss = self.model(X, Y, iter_num=self.iter_num)
                     losses[k] = loss.item()
                 out[split] = losses.mean()
 
@@ -694,7 +735,7 @@ class Trainer:
         torch.save(checkpoint, os.path.join(self.args.out_dir, filename))
 
     def train(self):
-        self.X, self.Y = self.get_batch('train')
+        x_a, y_a, x_b, y_b = self.get_batch('train')
         t0 = time.time()
         local_iter_num = 0
         running_mfu = -1.0
@@ -790,14 +831,14 @@ class Trainer:
                         self.model.require_backward_grad_sync = (micro_step == self.args.gradient_accumulation_steps - 1)
 
                     with self.ctx:
-                        logits, loss = self.model(self.X, self.Y, iter_num=self.iter_num)
+                        logits_a, logits_b, loss = self.model(x_a, x_b, y_a, y_b, iter_num=self.iter_num)
 
                         if self.args.focus_on_top1_loss:
                             loss = self.custom_loss_with_top1_focus(logits, self.Y)  # Use custom loss
 
                         loss = loss / self.args.gradient_accumulation_steps
 
-                    self.X, self.Y = self.get_batch('train')
+                    x_a, y_a, x_b, y_b = self.get_batch('train')
 
                     self.scaler.scale(loss).backward()
 
