@@ -719,15 +719,21 @@ class Trainer:
                 "mfu": running_mfu*100,
             })
 
-    def log_metrics_non_validation(self, loss_training, running_mfu, vram_allocated, iter_num, target_dataset=None):
+    def log_metrics_non_validation(self, losses, running_mfu, vram_allocated, iter_num, target_dataset=None):
         if self.args.tensorboard_log:
             if target_dataset:
                 self.writer.add_scalars(
-                    "loss", {f"{target_dataset}/train": loss_training}, iter_num
+                    "loss", {f"{target_dataset}/train": losses['train']}, iter_num
                 )
             else:
                 self.writer.add_scalars(
-                    "loss", { "train": loss_training }, iter_num
+                    "loss", {"train_a": losses['train_loss_a']}, iter_num
+                )
+                self.writer.add_scalars(
+                    "loss", {"train_b": losses['train_loss_b']}, iter_num
+                )
+                self.writer.add_scalars(
+                    "loss", {"train": losses['train']}, iter_num
                 )
             self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
             self.writer.add_scalar("vram", vram_allocated, iter_num)
@@ -736,7 +742,7 @@ class Trainer:
             import wandb
             wandb.log({
                 "iter": iter_num,
-                "train/loss": loss_training,
+                "train/loss": losses['train'],
                 "mfu": running_mfu*100,
                 "vram": vram_allocated,
             })
@@ -878,10 +884,12 @@ class Trainer:
                 t0 = t1
                 if self.iter_num % self.args.log_interval == 0 and self.master_process:
                     lossf = loss.item() * self.args.gradient_accumulation_steps
+                    lossf_a = loss_a * self.args.gradient_accumulation_steps
+                    lossf_b = loss_b * self.args.gradient_accumulation_steps
                     if local_iter_num >= 5:
                         mfu = self.raw_model.estimate_mfu(self.args.batch_size * self.args.gradient_accumulation_steps, dt)
                         running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-                    print(f"iter {self.iter_num}: loss {lossf:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
+                    print(f"iter {self.iter_num}: loss {lossf:.4f}, loss_a {lossf_a:.4f},loss_b {lossf_b:.4f}, time {dt*1000:.2f} ms, mfu {running_mfu*100:.2f}%")
                     if math.isnan(lossf):
                         # If training loss is nan, then exit.
                         with open(self.args.out_dir + "/nan_iter_num.txt", 'w') as file:
@@ -889,7 +897,11 @@ class Trainer:
                             sys.exit("Exiting training loss is NaN")
 
                     vram_allocated = get_gpu_memory_info(info_type='used') if self.args.device != "cpu" else 0
-                    self.log_metrics_non_validation(lossf, running_mfu, vram_allocated, self.iter_num)
+                    losses_training = {}
+                    losses_training['train'] = lossf
+                    losses_training['train_loss_a'] = lossf_a
+                    losses_training['train_loss_b'] = lossf_b
+                    self.log_metrics_non_validation(losses_training, running_mfu, vram_allocated, self.iter_num)
 
                 if self.args.create_statistics and local_iter_num % self.args.softmax_io_log_interval == 0:
                     create_statistics(self, graph_y_labels)
