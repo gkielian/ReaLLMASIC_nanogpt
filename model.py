@@ -734,10 +734,13 @@ class GPT(nn.Module):
             loss = (loss_a + loss_b) / 2.0
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position
-            logits = self.lm_head(x[:, [-1], :]) # note: using list [-1] to preserve the time dim
-            loss = None
+            logits_a = self.lm_head_a(x[:, [-1], :])
+            logits_b = self.lm_head_b(x[:, [-1], :])
+            loss_a = F.cross_entropy(logits_a.view(-1, logits_a.size(-1)), targets_a.view(-1), ignore_index=-1)
+            loss_b = F.cross_entropy(logits_b.view(-1, logits_b.size(-1)), targets_b.view(-1), ignore_index=-1)
+            loss = (loss_a + loss_b) / 2.0
 
-        return logits_a, logits_b, loss
+        return logits_a, logits_b, loss_a, loss_b, loss
 
     def set_lsv_scaling_factor(self, factor):
         self.lsv_matrix.update_lsv_scaling_factor(factor)

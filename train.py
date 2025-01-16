@@ -579,14 +579,24 @@ class Trainer:
         elif self.args.multicontext_training:
             # multicontext training
             for split in ['train', 'val']:
-                losses = torch.zeros(self.args.eval_iters)
+                losses_a = torch.zeros(self.args.eval_iters)
+                losses_b = torch.zeros(self.args.eval_iters)
                 for k in range(self.args.eval_iters):
                     x_a, y_a, x_b, y_b = self.get_batch(split)
 
                     with self.ctx:
-                        logits_a, logits_b, loss = self.model(x_a, x_b, y_a, y_b, iter_num=self.iter_num)
-                    losses[k] = loss.item()
-                out[split] = losses.mean()
+                        logits_a, logits_b, loss_a, loss_b, loss = self.model(x_a, x_b, y_a, y_b, iter_num=self.iter_num)
+                    losses_a[k] = loss_a
+                    losses_b[k] = loss_b
+
+                mean_a = losses_a.mean().item()
+                mean_b = losses_b.mean().item()
+
+                mean_loss = (mean_a + mean_b) / 2.0
+
+                out[split] = mean_loss
+                out[f"{split}_loss_a"] = mean_a
+                out[f"{split}_loss_b"] = mean_b
         else:
             # Default behavior for a single dataset
             for split in ['train', 'val']:
@@ -622,8 +632,16 @@ class Trainer:
                 )
             else:
                 self.writer.add_scalars(
-                    "loss", {"train": losses['train'].item(), "val":
-                             losses['val'].item()}, iter_num
+                    "loss", {"train_a": losses['train_loss_a'], "val":
+                             losses['val_loss_a']}, iter_num
+                )
+                self.writer.add_scalars(
+                    "loss", {"train_b": losses['train_loss_b'], "val":
+                             losses['val_loss_b']}, iter_num
+                )
+                self.writer.add_scalars(
+                    "loss", {"train": losses['train'], "val":
+                             losses['val']}, iter_num
                 )
 
             self.writer.add_scalar("mfu_pct", running_mfu * 100, iter_num)
@@ -651,7 +669,7 @@ class Trainer:
             if target_dataset:
                 self.write_to_csv(losses['train'].item(), losses['val'].item(), prefix=f"{target_dataset}_")
             else:
-                self.write_to_csv(losses['train'].item(), losses['val'].item())
+                self.write_to_csv(losses['train'], losses['val'])
 
             # Other metrics
             self.write_to_csv(iter_num, lr, running_mfu, vram_allocated, prefix="misc_")
@@ -765,7 +783,11 @@ class Trainer:
                             self.log_metrics(dataset_losses, lr, running_mfu, vram_allocated, self.iter_num, target_dataset=dataset)
                     else:
                         # Default behavior for a single dataset
-                        print(f"step {self.iter_num}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+                        val_a = losses.get('val_loss_a', 0.0)
+                        val_b = losses.get('val_loss_b', 0.0)
+                        val = losses['val']
+                        print(f"step {self.iter_num}: train_loss_a {losses['train_loss_a']:.4f}, val_loss_a {losses['val_loss_a']:.4f}")
+                        print(f"step {self.iter_num}: train_loss_b {losses['train_loss_b']:.4f}, val_loss_b {losses['val_loss_b']:.4f}")
                         self.log_metrics(losses, lr, running_mfu, vram_allocated, self.iter_num)
 
                     if math.isnan(losses["val"]):
@@ -787,7 +809,7 @@ class Trainer:
                             self.best_val_loss = losses['val']
                             # Save best validation loss
                             with open(os.path.join(self.args.out_dir, 'best_val_loss_and_iter.txt'), "w") as best_loss_file:
-                                best_loss_file.write(str(self.best_val_loss.item())+","+str(self.iter_num))
+                                best_loss_file.write(str(self.best_val_loss)+","+str(self.iter_num))
                             # Reset early exit counter
                             num_steps_with_worse_loss = 0
                         if self.iter_num > 0:
@@ -831,7 +853,7 @@ class Trainer:
                         self.model.require_backward_grad_sync = (micro_step == self.args.gradient_accumulation_steps - 1)
 
                     with self.ctx:
-                        logits_a, logits_b, loss = self.model(x_a, x_b, y_a, y_b, iter_num=self.iter_num)
+                        logits_a, logits_b, loss_a, loss_b, loss = self.model(x_a, x_b, y_a, y_b, iter_num=self.iter_num)
 
                         if self.args.focus_on_top1_loss:
                             loss = self.custom_loss_with_top1_focus(logits, self.Y)  # Use custom loss
