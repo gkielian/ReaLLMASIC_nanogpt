@@ -28,6 +28,18 @@ class RMSNorm(nn.Module):
         rms = x.norm(2, dim=-1, keepdim=True) / math.sqrt(x.size(-1))
         return x / rms * self.gain
 
+class HyperSphereNorm(nn.Module):
+    """Normalization to the surface of Hypersphere"""
+
+    def __init__(self, config):
+        super().__init__()
+        self.eps = 1e-5
+
+    def forward(self, x):
+        hypersphere_norm = x.norm(2, dim=-1, keepdim=True) + self.eps
+
+        return x / hypersphere_norm
+
 class pRMSNorm(nn.Module):
     """Partial RMS Normalization"""
 
