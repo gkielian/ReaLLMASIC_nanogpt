@@ -1,0 +1,19 @@
+[
+  {
+    "max_iters": ["10000"],
+    "n_layer": ["6"],
+    "n_head": ["6"],
+    "n_embd": ["768", "384"],
+    "block_size":["128"],
+    "device": ["cuda"],
+    "dtype": ["float16"],
+    "dataset": ["cosmopedia_100k"],
+    "use_rotary_embeddings": [true],
+    "compile": [true],
+    "mlp_variant": ["learned_rotation", "mlp"],
+    "skip_attn_res": [true, false],
+    "skip_mlp_res": [true, false],
+    "learned_rotation_scaling": [true, false]
+  }
+]
+
