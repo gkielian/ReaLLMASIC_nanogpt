@@ -130,7 +130,7 @@ def parse_args():
     training_group.add_argument('--show_heatmaps', default=False, action=argparse.BooleanOptionalAction, help="Show heatmaps (or bar charts) of top-k token probabilities.")
     training_group.add_argument('--chart_type', type=str, default='heatmap', choices=['heatmap', 'barchart'], help="Type of chart to display if --show_heatmaps is set.")
     training_group.add_argument('--last_k_tokens', type=int, default=10, help="Number of last tokens to display in heatmaps or bar charts.")
-    training_group.add_argument('--sample_file', type=str, default=None, help="Output file for inference samples (if you want to save them).")
+    training_group.add_argument('--sample_file', type=str, default="example_outputs.txt", help="Output file for inference samples (if you want to save them).")
     training_group.add_argument('--token_boundary', type=str, default=None, help="Optional separator string between emitted tokens (for decode).")
     training_group.add_argument('--num_samples', type=int, default=1, help="Number of generated samples during sampling.")
     training_group.add_argument('--temperature', type=float, default=0.8, help="Temperature for predictions (1.0 = normal, < 1.0 = less random).")
