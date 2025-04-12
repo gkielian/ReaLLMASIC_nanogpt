@@ -8,6 +8,8 @@ from variations.activation_variations import activation_dictionary
 from variations.linear_variations import linear_dictionary
 from quantization.quantize import fake_quantize_act
 from quantization.quant_utils import set_variant, create_activation_buffers
+from torch.linalg import matrix_exp
+
 
 class OriginalMLP(nn.Module):
     def __init__(self, config):
@@ -209,9 +211,6 @@ class Swiglu(nn.Module):
             x = fake_quantize_act(self, "mlp_act_output", x, num_bits, quant_method, iter_num)
         return x, mlp_res
 
-
-        return x
-
 class KanMLP(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -226,10 +225,45 @@ class KanMLP(nn.Module):
 
         return x
 
+class LearnedRotationMLP(nn.Module):
+    """
+    MLP variation using a single learned rotation.
+    Inspired by "On Learning Rotations" (Arora, 2009), using the exponential map
+    from a skew-symmetric matrix. Simpler structure like KanMLP.
+    Ignores quantization internally for simplicity.
+    """
+    def __init__(self, config):
+        super().__init__()
+        self.n_embd = config.n_embd
+        # Learnable matrix A. Skew-symmetry is enforced in the forward pass.
+        # Initialize near zero for near-identity initial rotation.
+        self.A = nn.Parameter(torch.randn(config.n_embd, config.n_embd) * 0.01)
+
+        if config.learned_rotation_scaling:
+            self.scaling_factor = nn.Parameter(torch.tensor([1.0]))
+        else:
+            self.scaling_factor = 1.0
+
+        self.dropout_layer = nn.Dropout(config.dropout)
+
+    def forward(self, x, iter_num=None, mlp_res=None): # Match signature, ignore mlp_res
+        # Enforce skew-symmetry
+        S = self.A - self.A.transpose(-1, -2)
+        # Compute rotation matrix using matrix exponential
+        R = matrix_exp(S) # R is now in SO(n_embd)
+        # Apply rotation
+        x = x @ R # x is (B, T, C), R is (C, C)
+        x = x * self.scaling_factor
+        # Apply dropout
+        x = self.dropout_layer(x)
+        # Return x and None for mlp_res to match expected return signature of other MLPs
+        return x, None
+
 mlp_dictionary = {
     "mlp": OriginalMLP,
     "swiglu": Swiglu,
-    "kan": KanMLP
+    "kan": KanMLP,
+    "learned_rotation": LearnedRotationMLP,
     }
 
 def get_mlp_instance(config):

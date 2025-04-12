@@ -189,11 +189,24 @@ def parse_args():
 
     training_group.add_argument("--lsv_focused_training", default=False, action=argparse.BooleanOptionalAction, help="train but only unfreeze lsv")
 
+    ## Residual Options
+    model_group.add_argument('--skip_attn_res', default=False, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--skip_mlp_res', default=False, action=argparse.BooleanOptionalAction)
+
     ## MLP Options
+    mlp_variations = [
+            "mlp",
+            "kan",
+            "swiglu",
+            "learned_rotation",
+            ]
+
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
-    model_group.add_argument("--mlp_variant", type=str, default="mlp", choices=["mlp", "kan", "swiglu"], help="MLP variation type")
+    model_group.add_argument("--mlp_variant", type=str, default="mlp", choices=mlp_variations, help="MLP variation type")
     model_group.add_argument("--mlp_expansion_factor", type=int, default=4, help="If MLP like variant is used, set the expansion factor for the linear transformations, default is 4.")
     model_group.add_argument('--mlp_res', default=False, action=argparse.BooleanOptionalAction)
+
+    model_group.add_argument('--learned_rotation_scaling', default=True, action=argparse.BooleanOptionalAction)
 
     ## KAN Options
     model_group.add_argument("--kan_poly_order", type=int, default=3, help="Order of KAN non-linearity")
