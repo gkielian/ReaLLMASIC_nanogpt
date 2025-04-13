@@ -6,6 +6,8 @@
     "n_head": ["3","4","5"],
     "n_embd": ["300"],
     "attention_variant": ["infinite"],
+    "sequence_vec_a_mag": ["1.0","10.0","100.0"],
+    "sequence_vec_b_mag": ["1.0","10.0","100.0"],
     "n_qk_head_dim": ["64"],
     "n_v_head_dim": ["128"],
     "block_size":["256"],

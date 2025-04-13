@@ -274,10 +274,10 @@ class AngleAndPlaceMLP(nn.Module):
 
         # --- Learnable Parameters ---
         # Initial scaling factor for 'a' vector
-        self.scale_a = nn.Parameter(torch.tensor(1.0))
+        self.scale_a = nn.Parameter(torch.tensor(config.sequence_vec_a_mag))
 
         # Final scaling factor for adding 'c' vector
-        self.scale_c = nn.Parameter(torch.tensor(10.0))
+        self.scale_c = nn.Parameter(torch.tensor(config.sequence_vec_b_mag))
 
         # The 'n' learnable vectors used for dot products. Shape: (num_rotations, n_embd)
         # Transpose it for efficient matmul later: (n_embd, num_rotations)

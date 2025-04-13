@@ -210,6 +210,8 @@ def parse_args():
 
     model_group.add_argument('--learned_rotation_scaling', default=True, action=argparse.BooleanOptionalAction)
     model_group.add_argument('--sequence_rotations', type=int, default=1)
+    model_group.add_argument('--sequence_vec_a_mag', type=float, default=1.0)
+    model_group.add_argument('--sequence_vec_b_mag', type=float, default=10.0)
 
     ## KAN Options
     model_group.add_argument("--kan_poly_order", type=int, default=3, help="Order of KAN non-linearity")

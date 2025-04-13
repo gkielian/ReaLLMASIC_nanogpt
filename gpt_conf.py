@@ -104,6 +104,8 @@ class GPTConfig:
 
     ## Sequential Rotation Options
     sequence_rotations: int = 1
+    sequence_vec_a_mag: float = 1.0
+    sequence_vec_b_mag: float = 10.0
 
     ## KAN Option
     kan_poly_order: int = 3
