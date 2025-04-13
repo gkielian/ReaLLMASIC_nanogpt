@@ -102,6 +102,9 @@ class GPTConfig:
     ## Learned Rotation Options
     learned_rotation_scaling: bool = True
 
+    ## Sequential Rotation Options
+    sequence_rotations: int = 1
+
     ## KAN Option
     kan_poly_order: int = 3
     kan_base_activation: str = "silu"

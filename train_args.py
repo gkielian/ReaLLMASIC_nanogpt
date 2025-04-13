@@ -199,6 +199,8 @@ def parse_args():
             "kan",
             "swiglu",
             "learned_rotation",
+            "axis_rotation_bias",
+            "identity",
             ]
 
     model_group.add_argument('--use_parallel_mlp', default=False, action=argparse.BooleanOptionalAction)
@@ -207,6 +209,7 @@ def parse_args():
     model_group.add_argument('--mlp_res', default=False, action=argparse.BooleanOptionalAction)
 
     model_group.add_argument('--learned_rotation_scaling', default=True, action=argparse.BooleanOptionalAction)
+    model_group.add_argument('--sequence_rotations', type=int, default=1)
 
     ## KAN Options
     model_group.add_argument("--kan_poly_order", type=int, default=3, help="Order of KAN non-linearity")
