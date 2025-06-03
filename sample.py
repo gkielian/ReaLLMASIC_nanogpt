@@ -614,7 +614,9 @@ def main():
         gptconf = GPTConfig()
         variation_dict = model_variation_dictionary[args.init_from]
         for k in variation_dict:
-            gptconf[k] = variation_dict[k]
+            for k, v in variation_dict.items():
+                print(k, v)
+                setattr(gptconf, k, v)
         model = GPT.from_pretrained(gptconf, model_type=args.init_from)
 
     # Load meta information if available
@@ -632,6 +634,11 @@ def main():
                 load_meta = True
                 break
 
+    if args.init_from.startswith("gpt2"):
+        enc = tiktoken.get_encoding("gpt2")
+        encode = lambda s: enc.encode(s, allowed_special={""})
+        decode = lambda l: enc.decode(l)
+        print(f"using tiktoken encoding gpt2")
     if load_meta:
         print(f"Loading meta from {meta_path}...")
         with open(meta_path, 'rb') as f:
@@ -832,7 +839,6 @@ def main():
                     with open(meta_path, "rb") as f:
                         meta = pickle.load(f)
                     if 'tokenizer' in meta and meta['tokenizer'] == 'tiktoken':
-                        import tiktoken
                         enc_obj = tiktoken.get_encoding(meta['tiktoken_encoding'])
                         decode_i = lambda l: enc_obj.decode(l)
                     else:
