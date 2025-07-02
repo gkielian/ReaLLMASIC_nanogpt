@@ -14,6 +14,7 @@ compile: [true]
 use_qk_norm: [true]
 use_qk_norm_scale: [true, false]
 softmax_variant_attn: [consmax_v2]
+consmax_v2_clamping: [false]
 # conditional options
 consmax_per_head:
   conditions:
