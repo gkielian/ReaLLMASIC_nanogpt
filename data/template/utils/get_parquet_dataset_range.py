@@ -4,7 +4,7 @@ import os
 import argparse
 import json
 from tqdm import tqdm
-# Note: BeautifulSoup import removed as it's no longer needed
+import pyarrow  # <-- Added to catch the specific Arrow exception
 
 def download_file(url, filename):
     """
@@ -30,13 +30,32 @@ def download_file(url, filename):
 def convert_to_json(parquet_path, json_path):
     """
     Convert Parquet file to JSON.
+    Returns True on success or if JSON already exists.
+    Returns False on corruption or read error.
     """
-    if not os.path.exists(json_path):
+    # If the JSON file already exists, we consider it a success and skip conversion.
+    if os.path.exists(json_path):
+        print(f"{json_path} already exists, continuing")
+        return True
+
+    try:
+        # Attempt to read the parquet file
         df = pd.read_parquet(parquet_path)
         df.to_json(json_path, orient="records")
         print(f"Converted {parquet_path} to JSON at {json_path}")
-    else:
-        print(f"{json_path} already exists, continuing")
+        return True
+    except pyarrow.ArrowInvalid as e:
+        # --- THIS CATCHES THE ERROR FROM YOUR SCREENSHOT ---
+        print(f"\n--- ⚠️ CORRUPTION ERROR processing {parquet_path} ---")
+        print(f"ArrowInvalid error: {e}")
+        print("File appears corrupted or is not a valid parquet file. SKIPPING.\n")
+        return False
+    except Exception as e:
+        # Catch any other unexpected errors during conversion
+        print(f"\n--- ⚠️ UNEXPECTED ERROR processing {parquet_path} ---")
+        print(f"Error: {e}")
+        print("SKIPPING this file.\n")
+        return False
 
 
 def emit_json_contents(
@@ -51,8 +70,7 @@ def emit_json_contents(
     role_prefixes=None,
 ):
     """
-    Emit the contents of the JSON file.
-    Optionally, write the output to a text file.
+    Emit the contents of the JSON file. (Unchanged from before)
     """
     with open(json_path, "r") as f:
         data = json.load(f)
@@ -149,6 +167,7 @@ def emit_json_contents(
 def generate_parquet_links(url_base, start_num, stop_num, total_shards, padding_digits=5):
     """
     Generate a list of parquet file links based on a numerical range.
+    (Reverted to original version that requires total_shards)
     """
     links = []
     # Format the total number of shards with padding
@@ -183,7 +202,7 @@ def main(
     list_key,
     role_prefixes,
 ):
-    # Generate the list of links instead of scraping
+    # Generate the list of links (using total_shards argument again)
     parquet_links = generate_parquet_links(
         url_base, start_num, stop_num, total_shards, padding_digits
     )
@@ -206,21 +225,25 @@ def main(
         if not os.path.exists(parquet_path):
             download_file(link, parquet_path)
 
-        # Convert the Parquet file to JSON
-        convert_to_json(parquet_path, json_path)
+        # --- UPDATED LOGIC HERE ---
+        # Convert the Parquet file to JSON and check for success
+        conversion_success = convert_to_json(parquet_path, json_path)
 
-        # Emit the JSON contents and write output to a text file
-        emit_json_contents(
-            json_path,
-            output_text_file,
-            include_keys,
-            value_prefixes,
-            required_key,
-            skip_empty,
-            exclude,
-            list_key=list_key,
-            role_prefixes=role_prefixes,
-        )
+        # Only proceed to emit contents if conversion was successful (or JSON already existed)
+        if conversion_success:
+            emit_json_contents(
+                json_path,
+                output_text_file,
+                include_keys,
+                value_prefixes,
+                required_key,
+                skip_empty,
+                exclude,
+                list_key=list_key,
+                role_prefixes=role_prefixes,
+            )
+        else:
+            print(f"Skipping emit step for failed/corrupted file: {file_name}\n")
 
 
 if __name__ == "__main__":
@@ -228,13 +251,12 @@ if __name__ == "__main__":
         description="Download and convert a range of Parquet files to JSON and save contents to a text file."
     )
 
-    # --- New arguments for URL generation ---
+    # --- Arguments for URL generation ---
     parser.add_argument(
         "--url_base",
         type=str,
         required=True,
-        help="Base URL for the parquet files, up to (but not including) the shard number. "
-             "Example: 'https://huggingface.co/datasets/skymizer/fineweb-edu-dedup-45B/resolve/main/data/train'",
+        help="Base URL for the parquet files... Example: '.../data/train'",
     )
     parser.add_argument(
         "--start_num",
@@ -283,7 +305,7 @@ if __name__ == "__main__":
         nargs="+",
         action="append",
         metavar=("KEY", "VALUE"),
-        help="Specify key-value pairs to be excluded. Use the format: --exclude KEY VALUE [KEY VALUE ...]",
+        help="Specify key-value pairs to be excluded...",
     )
     parser.add_argument(
         "-p",
@@ -291,7 +313,7 @@ if __name__ == "__main__":
         type=str,
         nargs="+",
         required=True,
-        help="List of prefixes to be added to each individual value when emitting to the text file.",
+        help="List of prefixes to be added to each individual value...",
     )
     parser.add_argument(
         "-r",
@@ -330,7 +352,7 @@ if __name__ == "__main__":
     
     args = parser.parse_args()
 
-    # Pass all arguments to main
+    # Pass all arguments to main (including args.total_shards again)
     main(
         args.url_base,
         args.start_num,

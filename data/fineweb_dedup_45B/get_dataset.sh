@@ -5,7 +5,7 @@
 
 BASE_URL="https://huggingface.co/datasets/skymizer/fineweb-edu-dedup-45B/resolve/main/data/train"
 START_SHARD=0
-END_SHARD=2      # This is the last file index (inclusive)
+END_SHARD=100      # This is the last file index (inclusive)
 TOTAL_SHARDS=448   # This is the 'of-XXXXX' number
 
 python3 ./utils/get_parquet_dataset_range.py \
